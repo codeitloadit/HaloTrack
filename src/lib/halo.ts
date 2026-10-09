@@ -10,16 +10,51 @@ export interface HaloDrawParams {
   opacity: number;
 }
 
+const RING_SEGMENTS = 64;
+const TOP_ANGLE = -Math.PI / 2;
+// How wide (in radians) the transparent gap at the top-middle is, and how softly
+// it fades back to full opacity — a player's legs usually pass through this part
+// of the ring, so keeping it fully opaque looks wrong draped over them.
+const TOP_GAP_SIGMA = 0.55;
+
+function angularDistance(a: number, b: number): number {
+  let d = Math.abs(a - b) % (Math.PI * 2);
+  if (d > Math.PI) d = Math.PI * 2 - d;
+  return d;
+}
+
 export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void {
   if (p.opacity <= 0.001 || p.radiusX <= 0 || p.radiusY <= 0) return;
+  const baseWidth = Math.max(4, p.radiusY * 0.35);
+  const topWidth = baseWidth * 0.55;
+  const bottomWidth = baseWidth * 0.95;
+
   ctx.save();
-  ctx.globalAlpha = p.opacity;
-  ctx.filter = "blur(6px)";
+  ctx.filter = "blur(2px)";
   ctx.strokeStyle = p.color;
-  ctx.lineWidth = Math.max(4, p.radiusY * 0.35);
-  ctx.beginPath();
-  ctx.ellipse(p.centerX, p.centerY, p.radiusX, p.radiusY, 0, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.shadowColor = p.color;
+  ctx.shadowBlur = Math.max(10, p.radiusY * 0.8);
+  ctx.lineCap = "round";
+
+  for (let i = 0; i < RING_SEGMENTS; i++) {
+    const a0 = (i / RING_SEGMENTS) * Math.PI * 2;
+    const a1 = ((i + 1) / RING_SEGMENTS) * Math.PI * 2;
+    const mid = (a0 + a1) / 2;
+
+    // 0 at the top, 1 at the bottom — gives the ring depth by tapering the far
+    // (top) side thinner than the near (bottom) side.
+    const verticalFactor = (Math.sin(mid) + 1) / 2;
+    const width = topWidth + (bottomWidth - topWidth) * verticalFactor;
+
+    const topFade = 1 - Math.exp(-(angularDistance(mid, TOP_ANGLE) ** 2) / (2 * TOP_GAP_SIGMA ** 2));
+
+    ctx.globalAlpha = p.opacity * topFade;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.ellipse(p.centerX, p.centerY, p.radiusX, p.radiusY, 0, a0, a1);
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 

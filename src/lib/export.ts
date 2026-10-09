@@ -58,11 +58,11 @@ export function hasSupportedExportFormat(): boolean {
  */
 export interface ExportResult {
   blob: Blob;
-  /** A still frame captured from partway through the recording, as a data URL —
-   * used as the result <video>'s poster so something is visible immediately,
-   * independent of whether the browser decides to paint a frame of the encoded
-   * video on its own (unreliable for MediaRecorder's own fragmented-mp4/webm
-   * output on some mobile browsers). */
+  /** The very first rendered frame (video + halo), as a data URL — used as the
+   * result <video>'s poster so something is visible immediately, independent of
+   * whether the browser decides to paint a frame of the encoded video on its own
+   * (unreliable for MediaRecorder's own fragmented-mp4/webm output on some mobile
+   * browsers). */
   posterDataUrl: string | null;
 }
 
@@ -113,6 +113,33 @@ export async function exportVideo(
   });
 
   const canvasSize = { width: canvas.width, height: canvas.height };
+
+  // Wait until the video has actually decoded and presented a real frame before
+  // creating the canvas stream / recorder at all — otherwise the gap between
+  // "playback started" and "first frame decoded" (which can be much longer on a
+  // real phone than in a desktop/headless test) gets captured as leading
+  // blank-canvas frames, showing up as a black flash before the video appears.
+  // readyState alone isn't a reliable signal for this, so requestVideoFrameCallback
+  // is preferred — it specifically only fires once a frame has been presented.
+  const firstFramePresented = new Promise<void>((resolve) => {
+    if (typeof videoEl.requestVideoFrameCallback === "function") {
+      videoEl.requestVideoFrameCallback(() => resolve());
+    } else {
+      const readyDeadline = performance.now() + 1000;
+      (async () => {
+        while (videoEl.readyState < videoEl.HAVE_CURRENT_DATA && performance.now() < readyDeadline) {
+          await new Promise<void>((r) => requestAnimationFrame(() => r()));
+        }
+        resolve();
+      })();
+    }
+  });
+  await videoEl.play();
+  await firstFramePresented;
+
+  renderFrame(ctx, videoEl, videoEl.currentTime, keyframes, halo, canvasSize);
+  const posterDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
   const canvasStream = canvas.captureStream();
   const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...destNode.stream.getAudioTracks()]);
 
@@ -122,34 +149,47 @@ export async function exportVideo(
     if (e.data.size > 0) chunks.push(e.data);
   };
 
-  let posterDataUrl: string | null = null;
+  const END_EPSILON = 0.05;
+  // Gap observed between "currentTime reaches the end" and the encoder pipeline
+  // actually having flushed enough data to produce a valid video track — calling
+  // recorder.stop() before this grace period elapses has been observed to
+  // silently produce an output with no video track at all (a sliver of audio
+  // still comes through, but no video frames), even though waiting for the
+  // native 'ended' event instead — which does eventually produce a correct
+  // recording — confirms the data genuinely isn't ready any earlier. 'ended'
+  // itself is unusable as the primary signal here since it's been observed to
+  // take upwards of 30+ seconds (likely related to audio being routed through
+  // the Web Audio graph below rather than a real output), so a short fixed delay
+  // after currentTime reaches the end is used instead.
+  const STOP_GRACE_MS = 600;
+
   let rafHandle: number | null = null;
+  let resolveFinished: (() => void) | null = null;
+  const finished = new Promise<void>((resolve) => {
+    resolveFinished = resolve;
+  });
+  function finish() {
+    if (!resolveFinished) return;
+    const resolve = resolveFinished;
+    resolveFinished = null;
+    setTimeout(resolve, STOP_GRACE_MS);
+  }
+  videoEl.addEventListener("ended", finish, { once: true });
+
   function drawLoop() {
     renderFrame(ctx!, videoEl, videoEl.currentTime, keyframes, halo, canvasSize);
     onProgress(project.durationSec > 0 ? Math.min(1, videoEl.currentTime / project.durationSec) : 0);
-    // Grab a poster frame partway through rather than at t=0, so it's a
-    // representative frame even if the very start is off-screen/faded.
-    if (!posterDataUrl && project.durationSec > 0 && videoEl.currentTime >= project.durationSec / 2) {
-      posterDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    if (videoEl.ended || videoEl.currentTime >= project.durationSec - END_EPSILON) {
+      finish();
+      return;
     }
-    if (!videoEl.ended) rafHandle = requestAnimationFrame(drawLoop);
+    rafHandle = requestAnimationFrame(drawLoop);
   }
-
-  const finished = new Promise<void>((resolve) => {
-    videoEl.addEventListener("ended", () => resolve(), { once: true });
-  });
 
   recorder.start();
   rafHandle = requestAnimationFrame(drawLoop);
-  await videoEl.play();
   await finished;
   if (rafHandle !== null) cancelAnimationFrame(rafHandle);
-  if (!posterDataUrl) {
-    // Fallback for a very short clip where currentTime never reached the
-    // halfway mark before 'ended' fired — whatever's on the canvas now still
-    // beats no poster at all.
-    posterDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-  }
 
   const stopped = new Promise<void>((resolve) => {
     recorder.addEventListener("stop", () => resolve(), { once: true });
