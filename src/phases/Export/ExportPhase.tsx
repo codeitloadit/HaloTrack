@@ -38,6 +38,12 @@ export default function ExportPhase() {
     setProgress(null);
   }
 
+  function handleStartOver() {
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    if (project) URL.revokeObjectURL(project.objectUrl);
+    dispatch({ type: "RESET" });
+  }
+
   async function handleSave() {
     if (!resultBlob || !resultUrl) return;
     const extension = resultBlob.type.includes("mp4") ? "mp4" : "webm";
@@ -82,7 +88,7 @@ export default function ExportPhase() {
         )}
       </div>
 
-      <PhaseNav onBack={() => dispatch({ type: "SET_PHASE", phase: "preview" })} />
+      <PhaseNav onBack={() => dispatch({ type: "SET_PHASE", phase: "preview" })} onNext={handleStartOver} />
     </div>
   );
 }

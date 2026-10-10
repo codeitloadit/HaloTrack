@@ -6,7 +6,8 @@ export type AppAction =
   | { type: "UPSERT_KEYFRAME"; keyframe: TrackKeyframe }
   | { type: "SET_HALO_CONFIG"; halo: HaloConfig }
   | { type: "SET_TRACK_CURSOR"; timestamp: number }
-  | { type: "SET_PLAYBACK"; playback: Partial<PlaybackState> };
+  | { type: "SET_PLAYBACK"; playback: Partial<PlaybackState> }
+  | { type: "RESET" };
 
 export const initialState: AppState = {
   phase: "import",
@@ -44,6 +45,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, trackCursor: action.timestamp };
     case "SET_PLAYBACK":
       return { ...state, playback: { ...state.playback, ...action.playback } };
+    case "RESET":
+      return initialState;
     default:
       return state;
   }
