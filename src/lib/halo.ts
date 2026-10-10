@@ -26,8 +26,8 @@ function angularDistance(a: number, b: number): number {
 export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void {
   if (p.opacity <= 0.001 || p.radiusX <= 0 || p.radiusY <= 0) return;
   const baseWidth = Math.max(4, p.radiusY * 0.35);
-  const topWidth = baseWidth * 0.55;
-  const bottomWidth = baseWidth * 0.95;
+  const topWidth = baseWidth * 0.7;
+  const bottomWidth = baseWidth * 0.8;
 
   ctx.save();
   ctx.filter = "blur(2px)";

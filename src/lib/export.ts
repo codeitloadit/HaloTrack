@@ -86,11 +86,18 @@ export async function exportVideo(
   // export instead relies on never connecting the audio graph to the speakers
   // (see below) rather than on the `muted` property.
   // Kept attached (off-screen) rather than fully detached — some mobile browsers
-  // throttle decoding of media elements that aren't in the document.
+  // throttle decoding of media elements that aren't in the document. Rendered at
+  // real size rather than shrunk to 1x1px: a visually tiny/zero-size video element
+  // has been observed (on long clips, on iOS) to have its *video* decode
+  // deprioritized under memory/power pressure independently of audio — showing up
+  // as the picture freezing partway through export while the audio keeps playing.
+  // Positioning it far off-screen (rather than shrinking it) avoids that signal
+  // while still keeping it invisible to the user.
   videoEl.style.position = "fixed";
-  videoEl.style.width = "1px";
-  videoEl.style.height = "1px";
-  videoEl.style.opacity = "0";
+  videoEl.style.left = "-100000px";
+  videoEl.style.top = "0";
+  videoEl.style.width = `${project.width}px`;
+  videoEl.style.height = `${project.height}px`;
   videoEl.style.pointerEvents = "none";
   document.body.appendChild(videoEl);
 
@@ -143,7 +150,20 @@ export async function exportVideo(
   const canvasStream = canvas.captureStream();
   const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...destNode.stream.getAudioTracks()]);
 
-  const recorder = new MediaRecorder(combinedStream, { mimeType: pickSupportedMime() });
+  // Our own capture pipeline has been confirmed (via on-screen diagnostics) to
+  // feed a fresh frame continuously the whole way through, with no stalls, so the
+  // freeze is happening downstream in the encoder. A higher explicit bitrate
+  // delayed it but didn't fix it — that shape (gets worse the longer the
+  // recording runs, regardless of available bitrate) points at an ever-growing
+  // internal buffer rather than a bitrate budget: with no timeslice, start()
+  // holds the entire encoded stream in memory until stop() is called, which is a
+  // known source of exactly this kind of degradation on longer recordings on
+  // WebKit. Requesting periodic dataavailable flushes below lets it release that
+  // buffer incrementally instead.
+  const recorder = new MediaRecorder(combinedStream, {
+    mimeType: pickSupportedMime(),
+    videoBitsPerSecond: 8_000_000,
+  });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data);
@@ -176,17 +196,48 @@ export async function exportVideo(
   }
   videoEl.addEventListener("ended", finish, { once: true });
 
+  // Defends against a failure mode (reported on longer clips on iOS) where the
+  // video decoder silently stalls partway through — currentTime stops advancing
+  // while audio keeps playing, since audio playout isn't tied to the same decode
+  // pipeline. There's no direct API to ask "is decode stuck", so this detects it
+  // indirectly (currentTime hasn't moved in a while despite not being paused/
+  // ended) and tries to recover by pausing, nudging forward past wherever it got
+  // stuck, and resuming — which has proven effective at "waking up" a stalled
+  // decoder elsewhere in this app (see lib/video.ts's seek nudge).
+  const STUCK_MS = 600;
+  const RECOVERY_COOLDOWN_MS = 1200;
+  let lastObservedTime = -1;
+  let lastChangeAt = performance.now();
+  let lastRecoveryAt = -Infinity;
+
   function drawLoop() {
-    renderFrame(ctx!, videoEl, videoEl.currentTime, keyframes, halo, canvasSize);
-    onProgress(project.durationSec > 0 ? Math.min(1, videoEl.currentTime / project.durationSec) : 0);
-    if (videoEl.ended || videoEl.currentTime >= project.durationSec - END_EPSILON) {
+    const t = videoEl.currentTime;
+    if (Math.abs(t - lastObservedTime) > 0.0005) {
+      lastObservedTime = t;
+      lastChangeAt = performance.now();
+    }
+
+    renderFrame(ctx!, videoEl, t, keyframes, halo, canvasSize);
+    onProgress(project.durationSec > 0 ? Math.min(1, t / project.durationSec) : 0);
+
+    if (videoEl.ended || t >= project.durationSec - END_EPSILON) {
       finish();
       return;
     }
+
+    const now = performance.now();
+    if (!videoEl.paused && now - lastChangeAt > STUCK_MS && now - lastRecoveryAt > RECOVERY_COOLDOWN_MS) {
+      lastRecoveryAt = now;
+      const resumeAt = Math.min(t + 0.03, project.durationSec);
+      videoEl.pause();
+      videoEl.currentTime = resumeAt;
+      void videoEl.play();
+    }
+
     rafHandle = requestAnimationFrame(drawLoop);
   }
 
-  recorder.start();
+  recorder.start(1000);
   rafHandle = requestAnimationFrame(drawLoop);
   await finished;
   if (rafHandle !== null) cancelAnimationFrame(rafHandle);
