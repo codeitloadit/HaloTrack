@@ -139,16 +139,27 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
     setComplete(false);
   }
 
+  function stepBy(deltaSeconds: number) {
+    if (!project) return;
+    jumpTo(clamp(trackCursor + deltaSeconds, 0, project.durationSec));
+  }
+
+  const duration = project?.durationSec ?? 0;
+
   return {
     indicator,
     offscreen: isOffscreen(indicator.centerX),
     cursor: trackCursor,
-    duration: project?.durationSec ?? 0,
+    duration,
     complete,
     applyPinch,
     applyPan,
     scheduleCommit,
     commitNow: commit,
     jumpTo,
+    stepPrev: () => stepBy(-STEP_SECONDS),
+    stepNext: () => stepBy(STEP_SECONDS),
+    canStepPrev: trackCursor > 0,
+    canStepNext: trackCursor < duration - END_EPSILON,
   };
 }
