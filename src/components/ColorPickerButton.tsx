@@ -10,6 +10,7 @@ const ROTATION_SNAP = 0.05;
 
 function swatchBackground(style: HaloStyle, color: string, secondColor: string): string {
   if (style === "rainbow") return RAINBOW_CSS;
+  if (style === "gradient") return `conic-gradient(${color}, ${secondColor}, ${color}, ${secondColor}, ${color})`;
   if (style === "comet") {
     return `conic-gradient(from 180deg, transparent, ${color} 45%, transparent 45% 50%, ${secondColor} 95%, transparent 95%)`;
   }
@@ -18,6 +19,7 @@ function swatchBackground(style: HaloStyle, color: string, secondColor: string):
 
 const STYLES: { style: HaloStyle; label: string }[] = [
   { style: "solid", label: "solid color" },
+  { style: "gradient", label: "two-color gradient" },
   { style: "comet", label: "comet" },
   { style: "rainbow", label: "rainbow" },
 ];
@@ -49,7 +51,9 @@ export default function ColorPickerButton({
 }: ColorPickerButtonProps) {
   const [open, setOpen] = useState(false);
   const [editingSecond, setEditingSecond] = useState(false);
-  const pickingSecond = style === "comet" && editingSecond;
+  const twoColors = style === "comet" || style === "gradient";
+  const pickingSecond = twoColors && editingSecond;
+  const colorLabels = style === "comet" ? ["comet 1 color", "comet 2 color"] : ["north/south color", "east/west color"];
 
   return (
     <div className="color-picker-btn">
@@ -74,7 +78,7 @@ export default function ColorPickerButton({
               />
             ))}
           </div>
-          {style === "comet" && (
+          {twoColors && (
             <div className="comet-color-select">
               {[color, secondColor].map((c, i) => (
                 <button
@@ -83,7 +87,7 @@ export default function ColorPickerButton({
                   className={(i === 1) === editingSecond ? "active" : ""}
                   style={{ background: c }}
                   onClick={() => setEditingSecond(i === 1)}
-                  aria-label={`comet ${i + 1} color`}
+                  aria-label={colorLabels[i]}
                 />
               ))}
             </div>

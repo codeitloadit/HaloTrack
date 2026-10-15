@@ -25,7 +25,7 @@ export interface HaloConfig {
   offsetX: number;
   offsetY: number;
   color: string;
-  /** The second comet's colour; only used by the comet style. */
+  /** The second colour, for the gradient (east/west) and comet (second comet) styles. */
   secondColor: string;
   opacity: number;
   style: HaloStyle;
@@ -33,7 +33,7 @@ export interface HaloConfig {
   rotationSpeed: number;
 }
 
-export type HaloStyle = "solid" | "rainbow" | "comet";
+export type HaloStyle = "solid" | "gradient" | "comet" | "rainbow";
 
 export interface PlaybackState {
   currentTime: number;

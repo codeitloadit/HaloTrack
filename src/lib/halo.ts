@@ -7,7 +7,7 @@ export interface HaloDrawParams {
   radiusX: number;
   radiusY: number;
   color: string;
-  /** The second comet's colour; only used by the comet style. */
+  /** The second colour, for the gradient (east/west) and comet (second comet) styles. */
   secondColor: string;
   opacity: number;
   style: HaloStyle;
@@ -131,7 +131,9 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
       ? rainbowGradient(lctx, p.rotation)
       : p.style === "comet"
         ? cometGradient(lctx, [p.color, p.secondColor], p.rotation, p.clockwise)
-        : p.color;
+        : p.style === "gradient"
+          ? twoToneGradient(lctx, [p.color, p.secondColor], p.rotation)
+          : p.color;
   lctx.fill(path, "evenodd");
 
   if (typeof lctx.createConicGradient === "function") {
@@ -210,7 +212,15 @@ function glowSections(p: HaloDrawParams): GlowSection[] | null {
       };
     });
   }
-  if (p.style === "comet" && p.secondColor.toLowerCase() !== p.color.toLowerCase()) {
+  const twoColors = p.secondColor.toLowerCase() !== p.color.toLowerCase();
+  if (p.style === "gradient" && twoColors) {
+    // The same weights the gradient blends its colours with, which add up to one.
+    return [
+      { color: p.color, weightAt: (angle) => Math.sin(angle - p.rotation) ** 2 },
+      { color: p.secondColor, weightAt: (angle) => Math.cos(angle - p.rotation) ** 2 },
+    ];
+  }
+  if (p.style === "comet" && twoColors) {
     // Each comet's section ends where its tail has faded to nothing, so the
     // hard boundary between the sections never shows.
     return [p.color, p.secondColor].map((color, k) => ({
@@ -343,6 +353,26 @@ function cometGradient(
     const { comet, alpha } = cometAt(head + t * Math.PI * 2, rotation, clockwise);
     const [r, g, b] = rgb[comet];
     gradient.addColorStop(t, `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(4)})`);
+  }
+  return gradient;
+}
+
+const TWO_TONE_STOPS = 72;
+
+/**
+ * Colour 1 at north and south (top and bottom of the ring), colour 2 at east
+ * and west, blending smoothly in between; turned by `rotation`.
+ */
+function twoToneGradient(ctx: CanvasRenderingContext2D, colors: [string, string], rotation: number): CanvasGradient | string {
+  if (typeof ctx.createConicGradient !== "function") return colors[0];
+  const [a, b] = colors.map(hexToRgb);
+  const gradient = ctx.createConicGradient(rotation, 0, 0);
+  for (let i = 0; i <= TWO_TONE_STOPS; i++) {
+    const t = i / TWO_TONE_STOPS;
+    // The conic starts at east, where colour 2 is at full strength.
+    const w = Math.cos(t * Math.PI * 2) ** 2;
+    const mix = (k: number) => Math.round(a[k] * (1 - w) + b[k] * w);
+    gradient.addColorStop(t, `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`);
   }
   return gradient;
 }
