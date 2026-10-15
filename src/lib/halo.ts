@@ -259,14 +259,17 @@ function renderGlow(
   return [accCanvas, pad];
 }
 
+// Two comets on opposite sides, chasing each other. The tail and leading-edge
+// lengths are fractions of the gap between the two heads.
+const COMETS = 2;
 const COMET_TAIL = 0.7;
-const COMET_LEAD = 0.015;
+const COMET_LEAD = 0.03;
 const COMET_STOPS = 360;
 
 /**
- * The comet's head is fully opaque, with a short soft leading edge in front,
- * and its tail fades out behind it over COMET_TAIL of the ring. It starts at the
- * bottom (nearest the viewer).
+ * Each comet's head is fully opaque, with a short soft leading edge in front,
+ * and its tail fades out behind it. The first starts at the bottom (nearest the
+ * viewer), the other directly opposite.
  */
 function cometGradient(
   ctx: CanvasRenderingContext2D,
@@ -280,9 +283,10 @@ function cometGradient(
   const gradient = ctx.createConicGradient(head, 0, 0);
   for (let i = 0; i <= COMET_STOPS; i++) {
     const t = i / COMET_STOPS;
-    // How far behind the head this point is, as a fraction of the ring. The
-    // conic sweeps clockwise, so a clockwise comet's tail is behind it at 1 - t.
-    let behind = clockwise ? 1 - t : t;
+    // How far behind the nearest head ahead of it this point is, as a fraction
+    // of the gap between heads. The conic sweeps clockwise, so a clockwise
+    // comet's tail is behind it at 1 - t.
+    let behind = ((clockwise ? 1 - t : t) * COMETS) % 1;
     if (behind > 1 - COMET_LEAD) behind -= 1;
     let alpha: number;
     if (behind < 0) alpha = (behind + COMET_LEAD) / COMET_LEAD;

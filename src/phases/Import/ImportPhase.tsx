@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { IconImport } from "../../components/icons";
+import { loadTracking, videoKey } from "../../lib/savedTracking";
 import { useAppDispatch } from "../../state/AppStateContext";
 
 export default function ImportPhase() {
@@ -12,15 +13,18 @@ export default function ImportPhase() {
     video.preload = "metadata";
     video.src = objectUrl;
     video.onloadedmetadata = () => {
+      const key = videoKey(file, video.duration, video.videoWidth, video.videoHeight);
       dispatch({
         type: "LOAD_PROJECT",
         project: {
+          key,
           file,
           objectUrl,
           durationSec: video.duration,
           width: video.videoWidth,
           height: video.videoHeight,
         },
+        savedKeyframes: loadTracking(key),
       });
     };
   }

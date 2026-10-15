@@ -1,6 +1,8 @@
 export type Phase = "import" | "track" | "halo" | "preview" | "export";
 
 export interface Project {
+  /** Stable identity used to remember this video's tracking across imports. */
+  key: string;
   file: File;
   objectUrl: string;
   durationSec: number;
@@ -46,6 +48,8 @@ export interface AppState {
 }
 
 export const STEP_SECONDS = 0.5;
+/** A keyframe this close to the video's end counts as the final step. */
+export const TRACK_END_EPSILON = 1e-3;
 export const MIN_INDICATOR_HEIGHT = 0.03;
 export const DEFAULT_HALO_OPACITY = 0.5;
 export const DEFAULT_HALO_OFFSET_Y = 0.008;

@@ -3,10 +3,9 @@ import type { RefObject } from "react";
 import { clamp } from "../../lib/geometry";
 import { seekTo } from "../../lib/video";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
-import { MIN_INDICATOR_HEIGHT, STEP_SECONDS, type TrackKeyframe } from "../../state/types";
+import { MIN_INDICATOR_HEIGHT, STEP_SECONDS, TRACK_END_EPSILON, type TrackKeyframe } from "../../state/types";
 
 const COMMIT_DEBOUNCE_MS = 400;
-const END_EPSILON = 1e-3;
 
 export interface IndicatorState {
   headY: number;
@@ -113,7 +112,7 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
     dispatch({ type: "UPSERT_KEYFRAME", keyframe });
 
     if (!project) return;
-    if (trackCursor >= project.durationSec - END_EPSILON) {
+    if (trackCursor >= project.durationSec - TRACK_END_EPSILON) {
       setComplete(true);
       return;
     }
@@ -160,6 +159,6 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
     stepPrev: () => stepBy(-STEP_SECONDS),
     stepNext: () => stepBy(STEP_SECONDS),
     canStepPrev: trackCursor > 0,
-    canStepNext: trackCursor < duration - END_EPSILON,
+    canStepNext: trackCursor < duration - TRACK_END_EPSILON,
   };
 }

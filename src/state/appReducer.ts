@@ -1,7 +1,7 @@
-import type { AppState, HaloConfig, Phase, PlaybackState, Project, TrackKeyframe } from "./types";
+import { STEP_SECONDS, TRACK_END_EPSILON, type AppState, type HaloConfig, type Phase, type PlaybackState, type Project, type TrackKeyframe } from "./types";
 
 export type AppAction =
-  | { type: "LOAD_PROJECT"; project: Project }
+  | { type: "LOAD_PROJECT"; project: Project; savedKeyframes: TrackKeyframe[] | null }
   | { type: "SET_PHASE"; phase: Phase }
   | { type: "UPSERT_KEYFRAME"; keyframe: TrackKeyframe }
   | { type: "SET_HALO_CONFIG"; halo: HaloConfig }
@@ -29,12 +29,20 @@ function upsertKeyframe(keyframes: TrackKeyframe[], keyframe: TrackKeyframe): Tr
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case "LOAD_PROJECT":
+    case "LOAD_PROJECT": {
+      const keyframes = action.savedKeyframes ?? [];
+      const last = keyframes[keyframes.length - 1];
+      // Fully tracked previously: skip straight to the halo. Partly tracked:
+      // resume tracking at the first step after the last one recorded.
+      const complete = last !== undefined && last.timestamp >= action.project.durationSec - TRACK_END_EPSILON;
       return {
         ...initialState,
         project: action.project,
-        phase: "track",
+        keyframes,
+        phase: complete ? "halo" : "track",
+        trackCursor: last && !complete ? Math.min(last.timestamp + STEP_SECONDS, action.project.durationSec) : 0,
       };
+    }
     case "SET_PHASE":
       return { ...state, phase: action.phase };
     case "UPSERT_KEYFRAME":
