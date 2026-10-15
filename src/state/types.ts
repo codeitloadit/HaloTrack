@@ -27,6 +27,8 @@ export interface HaloConfig {
   rainbow: boolean;
   /** Revolutions per second of the rainbow gradient; the sign sets direction. */
   rotationSpeed: number;
+  /** 0 = no glow, 0.5 = default, 1 = maximum. */
+  glow: number;
 }
 
 export interface PlaybackState {
@@ -46,4 +48,5 @@ export interface AppState {
 export const STEP_SECONDS = 0.5;
 export const MIN_INDICATOR_HEIGHT = 0.03;
 export const DEFAULT_HALO_OPACITY = 0.5;
+export const DEFAULT_HALO_GLOW = 0.5;
 export const DEFAULT_HALO_OFFSET_Y = 0.008;

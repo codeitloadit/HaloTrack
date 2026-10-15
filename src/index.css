@@ -291,10 +291,6 @@ input[type="range"] {
   gap: 10px;
 }
 
-.opacity-slider {
-  width: 100%;
-}
-
 .halo-mode-toggle {
   display: flex;
   justify-content: center;
@@ -316,15 +312,16 @@ input[type="range"] {
   opacity: 1;
 }
 
-.rotation-row {
+.slider-row {
   display: flex;
   align-items: center;
   gap: 8px;
   color: rgba(255, 255, 255, 0.6);
 }
 
-.rotation-slider {
+.row-slider {
   flex: 1;
+  min-width: 0;
 }
 
 /* --- Scrubber --- */

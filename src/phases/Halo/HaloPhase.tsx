@@ -9,7 +9,7 @@ import { clamp } from "../../lib/geometry";
 import { deriveHaloParams } from "../../lib/halo";
 import { seekTo } from "../../lib/video";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
-import { DEFAULT_HALO_OFFSET_Y, DEFAULT_HALO_OPACITY } from "../../state/types";
+import { DEFAULT_HALO_GLOW, DEFAULT_HALO_OFFSET_Y, DEFAULT_HALO_OPACITY } from "../../state/types";
 
 function defaultReferenceTimestamp(keyframes: { timestamp: number; offscreen: boolean }[]): number {
   const firstOnscreen = keyframes.find((k) => !k.offscreen);
@@ -35,6 +35,7 @@ export default function HaloPhase() {
           opacity: DEFAULT_HALO_OPACITY,
           rainbow: false,
           rotationSpeed: 0,
+          glow: DEFAULT_HALO_GLOW,
         },
       });
     }
@@ -121,6 +122,8 @@ export default function HaloPhase() {
           rotationSpeed={halo.rotationSpeed}
           onRainbowChange={(rainbow) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, rainbow } })}
           onRotationSpeedChange={(rotationSpeed) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, rotationSpeed } })}
+          glow={halo.glow}
+          onGlowChange={(glow) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, glow } })}
         />
       </div>
 

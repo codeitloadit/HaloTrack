@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { HexColorPicker } from "react-colorful";
-import { IconRotateCcw, IconRotateCw } from "./icons";
+import { IconGlow, IconOpacity, IconRotateCcw, IconRotateCw } from "./icons";
 
 const RAINBOW_CSS =
   "conic-gradient(hsl(0,100%,55%), hsl(60,100%,55%), hsl(120,100%,55%), hsl(180,100%,55%), hsl(240,100%,55%), hsl(300,100%,55%), hsl(360,100%,55%))";
@@ -12,10 +12,12 @@ interface ColorPickerButtonProps {
   opacity: number;
   rainbow: boolean;
   rotationSpeed: number;
+  glow: number;
   onColorChange: (color: string) => void;
   onOpacityChange: (opacity: number) => void;
   onRainbowChange: (rainbow: boolean) => void;
   onRotationSpeedChange: (speed: number) => void;
+  onGlowChange: (glow: number) => void;
 }
 
 export default function ColorPickerButton({
@@ -23,10 +25,12 @@ export default function ColorPickerButton({
   opacity,
   rainbow,
   rotationSpeed,
+  glow,
   onColorChange,
   onOpacityChange,
   onRainbowChange,
   onRotationSpeedChange,
+  onGlowChange,
 }: ColorPickerButtonProps) {
   const [open, setOpen] = useState(false);
 
@@ -58,11 +62,11 @@ export default function ColorPickerButton({
             />
           </div>
           {rainbow ? (
-            <div className="rotation-row">
+            <div className="slider-row">
               <IconRotateCcw size={16} />
               <input
                 type="range"
-                className="rotation-slider"
+                className="row-slider"
                 min={-1}
                 max={1}
                 step={0.01}
@@ -78,16 +82,32 @@ export default function ColorPickerButton({
           ) : (
             <HexColorPicker color={color} onChange={onColorChange} />
           )}
-          <input
-            type="range"
-            className="opacity-slider"
-            min={0}
-            max={1}
-            step={0.01}
-            value={opacity}
-            onChange={(e) => onOpacityChange(Number(e.target.value))}
-            aria-label="opacity"
-          />
+          <div className="slider-row">
+            <IconOpacity size={16} />
+            <input
+              type="range"
+              className="row-slider"
+              min={0}
+              max={1}
+              step={0.01}
+              value={opacity}
+              onChange={(e) => onOpacityChange(Number(e.target.value))}
+              aria-label="opacity"
+            />
+          </div>
+          <div className="slider-row">
+            <IconGlow size={16} />
+            <input
+              type="range"
+              className="row-slider"
+              min={0}
+              max={1}
+              step={0.01}
+              value={glow}
+              onChange={(e) => onGlowChange(Number(e.target.value))}
+              aria-label="glow"
+            />
+          </div>
         </div>
       )}
     </div>

@@ -11,6 +11,8 @@ export interface HaloDrawParams {
   rainbow: boolean;
   /** Radians the rainbow gradient is turned from its starting position. */
   rotation: number;
+  /** 0 = no glow, 0.5 = default, 1 = maximum. */
+  glow: number;
 }
 
 const RING_POINTS = 360;
@@ -27,13 +29,36 @@ function angularDistance(a: number, b: number): number {
   return d;
 }
 
-let layer: HTMLCanvasElement | null = null;
+const scratch = new Map<string, HTMLCanvasElement>();
 
-function getLayer(width: number, height: number): CanvasRenderingContext2D | null {
-  layer ??= document.createElement("canvas");
-  if (layer.width < width) layer.width = width;
-  if (layer.height < height) layer.height = height;
-  return layer.getContext("2d");
+/**
+ * A reusable offscreen canvas per purpose. Grown as needed and never shrunk,
+ * unless `exact`, which sizes it exactly: a canvas used to cast a shadow must be
+ * drawn whole, because WebKit drops the shadow when drawImage crops its source.
+ */
+function getScratch(
+  name: string,
+  width: number,
+  height: number,
+  exact = false,
+): [HTMLCanvasElement, CanvasRenderingContext2D] | null {
+  let canvas = scratch.get(name);
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    scratch.set(name, canvas);
+  }
+  if (exact ? canvas.width !== width : canvas.width < width) canvas.width = width;
+  if (exact ? canvas.height !== height : canvas.height < height) canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.clearRect(0, 0, width, height);
+  return [canvas, ctx];
 }
 
 /**
@@ -62,13 +87,11 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
   const halfH = p.radiusY + margin;
   const layerW = Math.ceil(halfW * 2 * res);
   const layerH = Math.ceil(halfH * 2 * res);
-  const lctx = getLayer(layerW, layerH);
-  if (!lctx) return;
+  const ringScratch = getScratch("ring", layerW, layerH, true);
+  if (!ringScratch) return;
+  const [layer, lctx] = ringScratch;
 
   const squash = p.radiusY / p.radiusX;
-  lctx.setTransform(1, 0, 0, 1, 0, 0);
-  lctx.globalCompositeOperation = "source-over";
-  lctx.clearRect(0, 0, layerW, layerH);
   lctx.setTransform(res, 0, 0, res * squash, halfW * res, halfH * res);
 
   const path = new Path2D();
@@ -118,45 +141,118 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
     lctx.globalCompositeOperation = "source-over";
   }
 
-  const glow = Math.max(10, p.radiusY * 0.8);
-  // Older Safari (before 18) has no canvas filter support.
-  const supportsFilter = typeof (ctx as { filter?: unknown }).filter === "string";
+  // The glow setting scales how far the glow spreads (0.5x-1.5x of the base size)
+  // and how strongly it's layered on (0-2x); the default 0.5 is 1x of each.
+  const glowBlur = Math.max(10, p.radiusY * 0.8) * (0.5 + p.glow) * res;
+  const glowStrength = p.glow * 2;
 
-  // A shadow can only glow in a single colour, so a rainbow ring gets its glow
-  // from a blurred copy of itself instead. Drawn in device pixels (transform
-  // reset) so the blur radius means the same thing on every canvas.
-  if (p.rainbow && supportsFilter) {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = p.opacity;
-    // A shadow's blur standard deviation is half its shadowBlur; match that.
-    ctx.filter = `blur(${(glow / 2) * res}px)`;
-    ctx.drawImage(
-      layer!,
-      0,
-      0,
-      layerW,
-      layerH,
-      m.a * (p.centerX - halfW) + m.e,
-      m.d * (p.centerY - halfH) + m.f,
-      m.a * halfW * 2,
-      m.d * halfH * 2,
-    );
-    ctx.restore();
+  if (glowStrength > 0) {
+    const glow = renderGlow(layer, layerW, layerH, glowBlur, p);
+    if (glow) {
+      const [glowCanvas, pad] = glow;
+      const padUser = pad / res;
+      ctx.save();
+      for (let remaining = glowStrength; remaining > 0; remaining -= 1) {
+        ctx.globalAlpha = p.opacity * Math.min(1, remaining);
+        ctx.drawImage(
+          glowCanvas,
+          0,
+          0,
+          layerW + pad * 2,
+          layerH + pad * 2,
+          p.centerX - halfW - padUser,
+          p.centerY - halfH - padUser,
+          (halfW + padUser) * 2,
+          (halfH + padUser) * 2,
+        );
+      }
+      ctx.restore();
+    }
   }
 
   ctx.save();
   ctx.globalAlpha = p.opacity;
   ctx.filter = "blur(1.5px)";
-  if (!p.rainbow) {
-    ctx.shadowColor = p.color;
-  } else if (!supportsFilter) {
-    ctx.shadowColor = "rgba(255, 255, 255, 0.6)";
-  }
-  // Shadows ignore the current transform, so scale the glow to device pixels.
-  ctx.shadowBlur = glow * res;
-  ctx.drawImage(layer!, 0, 0, layerW, layerH, p.centerX - halfW, p.centerY - halfH, halfW * 2, halfH * 2);
+  ctx.drawImage(layer, 0, 0, layerW, layerH, p.centerX - halfW, p.centerY - halfH, halfW * 2, halfH * 2);
   ctx.restore();
+}
+
+const GLOW_HUES = 6;
+
+/**
+ * Renders the ring's glow into its own canvas (padded so the blur has room to
+ * spread), returning it with the padding used, in device pixels.
+ *
+ * Built from canvas shadows rather than a `filter` blur: WebKit (Safari) accepts
+ * a canvas `filter` setting but doesn't actually draw the blur. A shadow can
+ * only be one colour though, so for a rainbow ring the ring is split into
+ * overlapping hue sections that blend smoothly into each other (their weights
+ * always add up to one), each casting a shadow in its own hue, accumulated
+ * additively so the sections sum back to a smoothly coloured glow.
+ */
+function renderGlow(
+  ring: HTMLCanvasElement,
+  ringW: number,
+  ringH: number,
+  blur: number,
+  p: HaloDrawParams,
+): [HTMLCanvasElement, number] | null {
+  const pad = Math.ceil(blur * 1.5);
+  const accW = ringW + pad * 2;
+  const accH = ringH + pad * 2;
+  // Twice as wide: the right half is a scratch strip for the shadow-casting
+  // copies of the ring (see castShadow); only the left half is used.
+  const acc = getScratch("glow", accW * 2, accH);
+  if (!acc) return null;
+  const [accCanvas, actx] = acc;
+
+  // Shadow-only pass: draw the source into the right-hand strip and offset its
+  // shadow back into the left half, so the left half receives only the blurred
+  // shadow.
+  const offset = accW;
+  actx.shadowBlur = blur;
+  actx.shadowOffsetX = -offset;
+  const castShadow = (source: HTMLCanvasElement, color: string) => {
+    actx.shadowColor = color;
+    actx.drawImage(source, pad + offset, pad);
+  };
+
+  const rainbow = p.rainbow && typeof actx.createConicGradient === "function";
+  if (!rainbow) {
+    castShadow(ring, p.rainbow ? "#ff3b30" : p.color);
+    return [accCanvas, pad];
+  }
+
+  const section = getScratch("glow-section", ringW, ringH, true);
+  if (!section) return null;
+  const [sectionCanvas, sctx] = section;
+  const span = (Math.PI * 2) / GLOW_HUES;
+  actx.globalCompositeOperation = "lighter";
+  for (let k = 0; k < GLOW_HUES; k++) {
+    sctx.globalCompositeOperation = "source-over";
+    sctx.clearRect(0, 0, ringW, ringH);
+    sctx.drawImage(ring, 0, 0, ringW, ringH, 0, 0, ringW, ringH);
+    // A raised-cosine bump centred on this hue's position around the ring,
+    // reaching zero at its neighbours' centres. The ring was drawn in circle
+    // space squashed vertically, so the gradient uses the same squash to line
+    // its angles up with the ring's.
+    const centre = p.rotation + k * span;
+    const squash = p.radiusY / p.radiusX;
+    sctx.setTransform(1, 0, 0, squash, ringW / 2, ringH / 2);
+    const weight = sctx.createConicGradient(centre - span, 0, 0);
+    const STEPS = 16;
+    for (let i = 0; i <= STEPS; i++) {
+      const d = (i / STEPS) * 2 * span - span;
+      weight.addColorStop(((i / STEPS) * 2 * span) / (Math.PI * 2), `rgba(0,0,0,${Math.cos((Math.PI * d) / (2 * span)) ** 2})`);
+    }
+    weight.addColorStop(Math.min(1, (2 * span) / (Math.PI * 2) + 0.001), "rgba(0,0,0,0)");
+    sctx.globalCompositeOperation = "destination-in";
+    sctx.fillStyle = weight;
+    sctx.fillRect(-ringW, -ringH / squash, ringW * 2, (ringH / squash) * 2);
+    sctx.setTransform(1, 0, 0, 1, 0, 0);
+    castShadow(sectionCanvas, `hsl(${(k / GLOW_HUES) * 360}, 100%, 55%)`);
+  }
+  return [accCanvas, pad];
 }
 
 function rainbowGradient(ctx: CanvasRenderingContext2D, rotation: number): CanvasGradient | string {
@@ -210,5 +306,6 @@ export function deriveHaloParams(
     // Tied to video time rather than wall-clock time, so the same frame always
     // gets the same rotation in preview and export.
     rotation: 2 * Math.PI * halo.rotationSpeed * t,
+    glow: halo.glow,
   };
 }
