@@ -274,6 +274,7 @@ input[type="range"] {
 }
 
 .color-picker-popover {
+  width: 224px;
   position: absolute;
   bottom: calc(100% + 12px);
   left: 50%;
@@ -292,6 +293,38 @@ input[type="range"] {
 
 .opacity-slider {
   width: 100%;
+}
+
+.halo-mode-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.halo-mode-toggle button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  padding: 0;
+  border: 2px solid transparent;
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+.halo-mode-toggle button.active {
+  border-color: rgba(255, 255, 255, 0.85);
+  opacity: 1;
+}
+
+.rotation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.rotation-slider {
+  flex: 1;
 }
 
 /* --- Scrubber --- */

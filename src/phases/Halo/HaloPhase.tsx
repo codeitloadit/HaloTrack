@@ -33,6 +33,8 @@ export default function HaloPhase() {
           offsetY: DEFAULT_HALO_OFFSET_Y,
           color: "#ff3b30",
           opacity: DEFAULT_HALO_OPACITY,
+          rainbow: false,
+          rotationSpeed: 0,
         },
       });
     }
@@ -96,7 +98,7 @@ export default function HaloPhase() {
               }
               onPan={(dx, dy) => adjustPosition(dx, dy, box.width, box.height)}
             >
-              <HaloOverlay width={box.width} height={box.height} params={derived} />
+              <HaloOverlay width={box.width} height={box.height} params={derived} rotationSpeed={halo.rotationSpeed} />
             </GestureSurface>
           );
         }}
@@ -115,6 +117,10 @@ export default function HaloPhase() {
           opacity={halo.opacity}
           onColorChange={(color) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, color } })}
           onOpacityChange={(opacity) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, opacity } })}
+          rainbow={halo.rainbow}
+          rotationSpeed={halo.rotationSpeed}
+          onRainbowChange={(rainbow) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, rainbow } })}
+          onRotationSpeedChange={(rotationSpeed) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, rotationSpeed } })}
         />
       </div>
 

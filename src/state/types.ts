@@ -24,6 +24,9 @@ export interface HaloConfig {
   offsetY: number;
   color: string;
   opacity: number;
+  rainbow: boolean;
+  /** Revolutions per second of the rainbow gradient; the sign sets direction. */
+  rotationSpeed: number;
 }
 
 export interface PlaybackState {

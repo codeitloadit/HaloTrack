@@ -8,6 +8,9 @@ export interface HaloDrawParams {
   radiusY: number;
   color: string;
   opacity: number;
+  rainbow: boolean;
+  /** Radians the rainbow gradient is turned from its starting position. */
+  rotation: number;
 }
 
 const RING_POINTS = 360;
@@ -98,7 +101,7 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
   }
   path.closePath();
 
-  lctx.fillStyle = p.color;
+  lctx.fillStyle = p.rainbow ? rainbowGradient(lctx, p.rotation) : p.color;
   lctx.fill(path, "evenodd");
 
   if (typeof lctx.createConicGradient === "function") {
@@ -115,14 +118,55 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
     lctx.globalCompositeOperation = "source-over";
   }
 
+  const glow = Math.max(10, p.radiusY * 0.8);
+  // Older Safari (before 18) has no canvas filter support.
+  const supportsFilter = typeof (ctx as { filter?: unknown }).filter === "string";
+
+  // A shadow can only glow in a single colour, so a rainbow ring gets its glow
+  // from a blurred copy of itself instead. Drawn in device pixels (transform
+  // reset) so the blur radius means the same thing on every canvas.
+  if (p.rainbow && supportsFilter) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = p.opacity;
+    // A shadow's blur standard deviation is half its shadowBlur; match that.
+    ctx.filter = `blur(${(glow / 2) * res}px)`;
+    ctx.drawImage(
+      layer!,
+      0,
+      0,
+      layerW,
+      layerH,
+      m.a * (p.centerX - halfW) + m.e,
+      m.d * (p.centerY - halfH) + m.f,
+      m.a * halfW * 2,
+      m.d * halfH * 2,
+    );
+    ctx.restore();
+  }
+
   ctx.save();
   ctx.globalAlpha = p.opacity;
   ctx.filter = "blur(1.5px)";
-  ctx.shadowColor = p.color;
+  if (!p.rainbow) {
+    ctx.shadowColor = p.color;
+  } else if (!supportsFilter) {
+    ctx.shadowColor = "rgba(255, 255, 255, 0.6)";
+  }
   // Shadows ignore the current transform, so scale the glow to device pixels.
-  ctx.shadowBlur = Math.max(10, p.radiusY * 0.8) * res;
+  ctx.shadowBlur = glow * res;
   ctx.drawImage(layer!, 0, 0, layerW, layerH, p.centerX - halfW, p.centerY - halfH, halfW * 2, halfH * 2);
   ctx.restore();
+}
+
+function rainbowGradient(ctx: CanvasRenderingContext2D, rotation: number): CanvasGradient | string {
+  if (typeof ctx.createConicGradient !== "function") return "#ff3b30";
+  const gradient = ctx.createConicGradient(rotation, 0, 0);
+  const STOPS = 12;
+  for (let i = 0; i <= STOPS; i++) {
+    gradient.addColorStop(i / STOPS, `hsl(${(i / STOPS) * 360}, 100%, 55%)`);
+  }
+  return gradient;
 }
 
 export function indicatorHeight(headY: number, feetY: number): number {
@@ -143,21 +187,12 @@ export function haloOpacityAt(keyframes: TrackKeyframe[], t: number, baseOpacity
   return baseOpacity * visibility;
 }
 
-export interface DerivedHaloParams {
-  centerX: number;
-  centerY: number;
-  radiusX: number;
-  radiusY: number;
-  color: string;
-  opacity: number;
-}
-
 export function deriveHaloParams(
   t: number,
   keyframes: TrackKeyframe[],
   halo: HaloConfig,
   canvasSize: { width: number; height: number },
-): DerivedHaloParams {
+): HaloDrawParams {
   const referenceIndicator = interpolateIndicator(keyframes, halo.referenceTimestamp);
   const referenceHeight = indicatorHeight(referenceIndicator.headY, referenceIndicator.feetY);
   const scale = scaleFactorAt(keyframes, t, referenceHeight);
@@ -171,5 +206,9 @@ export function deriveHaloParams(
     radiusY: halo.verticalRadius * scale * canvasSize.height,
     color: halo.color,
     opacity,
+    rainbow: halo.rainbow,
+    // Tied to video time rather than wall-clock time, so the same frame always
+    // gets the same rotation in preview and export.
+    rotation: 2 * Math.PI * halo.rotationSpeed * t,
   };
 }
