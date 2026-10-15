@@ -32,6 +32,7 @@ export default function HaloPhase() {
           offsetX: 0,
           offsetY: DEFAULT_HALO_OFFSET_Y,
           color: "#ff3b30",
+          secondColor: "#ff3b30",
           opacity: DEFAULT_HALO_OPACITY,
           style: "solid",
           rotationSpeed: 0,
@@ -116,6 +117,8 @@ export default function HaloPhase() {
           color={halo.color}
           opacity={halo.opacity}
           onColorChange={(color) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, color } })}
+          secondColor={halo.secondColor}
+          onSecondColorChange={(secondColor) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, secondColor } })}
           onOpacityChange={(opacity) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, opacity } })}
           style={halo.style}
           rotationSpeed={halo.rotationSpeed}

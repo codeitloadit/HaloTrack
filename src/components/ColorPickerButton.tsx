@@ -8,9 +8,11 @@ const RAINBOW_CSS =
 // Speeds this close to zero snap to "off", so the slider's centre is easy to hit.
 const ROTATION_SNAP = 0.05;
 
-function swatchBackground(style: HaloStyle, color: string): string {
+function swatchBackground(style: HaloStyle, color: string, secondColor: string): string {
   if (style === "rainbow") return RAINBOW_CSS;
-  if (style === "comet") return `conic-gradient(from 180deg, transparent, ${color} 80%, transparent 80%)`;
+  if (style === "comet") {
+    return `conic-gradient(from 180deg, transparent, ${color} 45%, transparent 45% 50%, ${secondColor} 95%, transparent 95%)`;
+  }
   return color;
 }
 
@@ -22,10 +24,12 @@ const STYLES: { style: HaloStyle; label: string }[] = [
 
 interface ColorPickerButtonProps {
   color: string;
+  secondColor: string;
   opacity: number;
   style: HaloStyle;
   rotationSpeed: number;
   onColorChange: (color: string) => void;
+  onSecondColorChange: (color: string) => void;
   onOpacityChange: (opacity: number) => void;
   onStyleChange: (style: HaloStyle) => void;
   onRotationSpeedChange: (speed: number) => void;
@@ -33,22 +37,26 @@ interface ColorPickerButtonProps {
 
 export default function ColorPickerButton({
   color,
+  secondColor,
   opacity,
   style,
   rotationSpeed,
   onColorChange,
+  onSecondColorChange,
   onOpacityChange,
   onStyleChange,
   onRotationSpeedChange,
 }: ColorPickerButtonProps) {
   const [open, setOpen] = useState(false);
+  const [editingSecond, setEditingSecond] = useState(false);
+  const pickingSecond = style === "comet" && editingSecond;
 
   return (
     <div className="color-picker-btn">
       <button
         type="button"
         className="color-swatch"
-        style={{ background: swatchBackground(style, color), opacity: 0.3 + opacity * 0.7 }}
+        style={{ background: swatchBackground(style, color, secondColor), opacity: 0.3 + opacity * 0.7 }}
         onClick={() => setOpen((v) => !v)}
         aria-label="halo style"
       />
@@ -60,13 +68,32 @@ export default function ColorPickerButton({
                 key={s.style}
                 type="button"
                 className={style === s.style ? "active" : ""}
-                style={{ background: swatchBackground(s.style, color) }}
+                style={{ background: swatchBackground(s.style, color, secondColor) }}
                 onClick={() => onStyleChange(s.style)}
                 aria-label={s.label}
               />
             ))}
           </div>
-          {style !== "rainbow" && <HexColorPicker color={color} onChange={onColorChange} />}
+          {style === "comet" && (
+            <div className="comet-color-select">
+              {[color, secondColor].map((c, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className={(i === 1) === editingSecond ? "active" : ""}
+                  style={{ background: c }}
+                  onClick={() => setEditingSecond(i === 1)}
+                  aria-label={`comet ${i + 1} color`}
+                />
+              ))}
+            </div>
+          )}
+          {style !== "rainbow" && (
+            <HexColorPicker
+              color={pickingSecond ? secondColor : color}
+              onChange={pickingSecond ? onSecondColorChange : onColorChange}
+            />
+          )}
           {style !== "solid" && (
             <div className="slider-row">
               <IconRotateCcw size={16} />

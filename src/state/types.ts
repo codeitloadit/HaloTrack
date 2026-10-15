@@ -25,6 +25,8 @@ export interface HaloConfig {
   offsetX: number;
   offsetY: number;
   color: string;
+  /** The second comet's colour; only used by the comet style. */
+  secondColor: string;
   opacity: number;
   style: HaloStyle;
   /** Revolutions per second of the rainbow or comet; the sign sets direction. */

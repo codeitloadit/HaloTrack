@@ -7,6 +7,8 @@ export interface HaloDrawParams {
   radiusX: number;
   radiusY: number;
   color: string;
+  /** The second comet's colour; only used by the comet style. */
+  secondColor: string;
   opacity: number;
   style: HaloStyle;
   /** Radians the rainbow or comet is turned from its starting position. */
@@ -128,7 +130,7 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
     p.style === "rainbow"
       ? rainbowGradient(lctx, p.rotation)
       : p.style === "comet"
-        ? cometGradient(lctx, p.color, p.rotation, p.clockwise)
+        ? cometGradient(lctx, [p.color, p.secondColor], p.rotation, p.clockwise)
         : p.color;
   lctx.fill(path, "evenodd");
 
@@ -181,7 +183,43 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
 // The glow spreads 1.5x the base size and is layered on twice.
 const GLOW_SPREAD = 1.5;
 const GLOW_PASSES = 2;
-const GLOW_HUES = 6;
+const RAINBOW_GLOW_HUES = 6;
+const SECTION_STOPS = 120;
+
+interface GlowSection {
+  color: string;
+  /** How much of the ring at this angle belongs to this section, 0-1. */
+  weightAt: (angle: number) => number;
+}
+
+/** Parts of the ring that glow in different colours; null if it's all one colour. */
+function glowSections(p: HaloDrawParams): GlowSection[] | null {
+  if (p.style === "rainbow") {
+    const span = (Math.PI * 2) / RAINBOW_GLOW_HUES;
+    return Array.from({ length: RAINBOW_GLOW_HUES }, (_, k) => {
+      const centre = p.rotation + k * span;
+      return {
+        color: `hsl(${(k / RAINBOW_GLOW_HUES) * 360}, 100%, 55%)`,
+        // A raised-cosine bump centred on this hue's position around the ring,
+        // reaching zero at its neighbours' centres, so neighbouring weights
+        // always add up to one and the sections blend seamlessly.
+        weightAt: (angle) => {
+          const d = angularDistance(angle, centre);
+          return d < span ? Math.cos((Math.PI * d) / (2 * span)) ** 2 : 0;
+        },
+      };
+    });
+  }
+  if (p.style === "comet" && p.secondColor.toLowerCase() !== p.color.toLowerCase()) {
+    // Each comet's section ends where its tail has faded to nothing, so the
+    // hard boundary between the sections never shows.
+    return [p.color, p.secondColor].map((color, k) => ({
+      color,
+      weightAt: (angle) => (cometAt(angle, p.rotation, p.clockwise).comet === k ? 1 : 0),
+    }));
+  }
+  return null;
+}
 
 /**
  * Renders the ring's glow into its own canvas (padded so the blur has room to
@@ -189,10 +227,9 @@ const GLOW_HUES = 6;
  *
  * Built from canvas shadows rather than a `filter` blur: WebKit (Safari) accepts
  * a canvas `filter` setting but doesn't actually draw the blur. A shadow can
- * only be one colour though, so for a rainbow ring the ring is split into
- * overlapping hue sections that blend smoothly into each other (their weights
- * always add up to one), each casting a shadow in its own hue, accumulated
- * additively so the sections sum back to a smoothly coloured glow.
+ * only be one colour though, so a multi-coloured ring is split into sections
+ * (see glowSections), each casting a shadow in its own colour, accumulated
+ * additively so the sections sum back to one smoothly coloured glow.
  */
 function renderGlow(
   ring: HTMLCanvasElement,
@@ -221,77 +258,90 @@ function renderGlow(
     actx.drawImage(source, pad + offset, pad);
   };
 
-  const rainbow = p.style === "rainbow" && typeof actx.createConicGradient === "function";
-  if (!rainbow) {
+  const sections = typeof actx.createConicGradient === "function" ? glowSections(p) : null;
+  if (!sections) {
     castShadow(ring, p.style === "rainbow" ? "#ff3b30" : p.color);
     return [accCanvas, pad];
   }
 
-  const section = getScratch("glow-section", ringW, ringH, true);
-  if (!section) return null;
-  const [sectionCanvas, sctx] = section;
-  const span = (Math.PI * 2) / GLOW_HUES;
+  const sectionScratch = getScratch("glow-section", ringW, ringH, true);
+  if (!sectionScratch) return null;
+  const [sectionCanvas, sctx] = sectionScratch;
+  const squash = p.radiusY / p.radiusX;
   actx.globalCompositeOperation = "lighter";
-  for (let k = 0; k < GLOW_HUES; k++) {
+  for (const { color, weightAt } of sections) {
     sctx.globalCompositeOperation = "source-over";
     sctx.clearRect(0, 0, ringW, ringH);
     sctx.drawImage(ring, 0, 0, ringW, ringH, 0, 0, ringW, ringH);
-    // A raised-cosine bump centred on this hue's position around the ring,
-    // reaching zero at its neighbours' centres. The ring was drawn in circle
-    // space squashed vertically, so the gradient uses the same squash to line
-    // its angles up with the ring's.
-    const centre = p.rotation + k * span;
-    const squash = p.radiusY / p.radiusX;
+    // The ring was drawn in circle space squashed vertically, so the mask uses
+    // the same squash to line its angles up with the ring's.
     sctx.setTransform(1, 0, 0, squash, ringW / 2, ringH / 2);
-    const weight = sctx.createConicGradient(centre - span, 0, 0);
-    const STEPS = 16;
-    for (let i = 0; i <= STEPS; i++) {
-      const d = (i / STEPS) * 2 * span - span;
-      weight.addColorStop(((i / STEPS) * 2 * span) / (Math.PI * 2), `rgba(0,0,0,${Math.cos((Math.PI * d) / (2 * span)) ** 2})`);
+    const mask = sctx.createConicGradient(0, 0, 0);
+    for (let i = 0; i <= SECTION_STOPS; i++) {
+      const t = i / SECTION_STOPS;
+      mask.addColorStop(t, `rgba(0,0,0,${weightAt(t * Math.PI * 2).toFixed(4)})`);
     }
-    weight.addColorStop(Math.min(1, (2 * span) / (Math.PI * 2) + 0.001), "rgba(0,0,0,0)");
     sctx.globalCompositeOperation = "destination-in";
-    sctx.fillStyle = weight;
+    sctx.fillStyle = mask;
     sctx.fillRect(-ringW, -ringH / squash, ringW * 2, (ringH / squash) * 2);
     sctx.setTransform(1, 0, 0, 1, 0, 0);
-    castShadow(sectionCanvas, `hsl(${(k / GLOW_HUES) * 360}, 100%, 55%)`);
+    castShadow(sectionCanvas, color);
   }
   return [accCanvas, pad];
 }
 
-// Two comets on opposite sides, chasing each other. The tail and leading-edge
-// lengths are fractions of the gap between the two heads.
+// Two comets on opposite sides, chasing each other. Lengths are fractions of
+// the gap between the two heads: each tail runs almost the whole gap, ending
+// where the other comet's short leading edge begins.
 const COMETS = 2;
-const COMET_TAIL = 0.7;
 const COMET_LEAD = 0.03;
+const COMET_TAIL = 1 - COMET_LEAD;
+const COMET_FALLOFF = 1.5;
 const COMET_STOPS = 360;
 
 /**
- * Each comet's head is fully opaque, with a short soft leading edge in front,
- * and its tail fades out behind it. The first starts at the bottom (nearest the
- * viewer), the other directly opposite.
+ * Which comet owns the ring at `angle`, and how opaque it is there. Each head
+ * is fully opaque, with a short soft leading edge in front and a tail fading
+ * out behind it. The first starts at the bottom (nearest the viewer), the
+ * other directly opposite.
  */
+function cometAt(angle: number, rotation: number, clockwise: boolean): { comet: number; alpha: number } {
+  const head = Math.PI / 2 + rotation;
+  // Fraction of the ring clockwise from the first head.
+  const t = ((((angle - head) / (Math.PI * 2)) % 1) + 1) % 1;
+  // How far behind the first head this point is, in gaps between heads. Tails
+  // trail opposite the direction of travel, so for a clockwise comet a point
+  // t of the way clockwise from its head is 1 - t behind it.
+  const q = (clockwise ? 1 - t : t) * COMETS;
+  let comet = Math.floor(q) % COMETS;
+  let behind = q - Math.floor(q);
+  if (behind > 1 - COMET_LEAD) {
+    // Just ahead of the next head: its leading edge.
+    behind -= 1;
+    comet = (comet + 1) % COMETS;
+  }
+  let alpha: number;
+  if (behind < 0) alpha = (behind + COMET_LEAD) / COMET_LEAD;
+  else if (behind < COMET_TAIL) alpha = (1 - behind / COMET_TAIL) ** COMET_FALLOFF;
+  else alpha = 0;
+  return { comet, alpha };
+}
+
 function cometGradient(
   ctx: CanvasRenderingContext2D,
-  color: string,
+  colors: [string, string],
   rotation: number,
   clockwise: boolean,
 ): CanvasGradient | string {
-  if (typeof ctx.createConicGradient !== "function") return color;
-  const [r, g, b] = hexToRgb(color);
+  if (typeof ctx.createConicGradient !== "function") return colors[0];
+  const rgb = colors.map(hexToRgb);
+  // Start at the first head so both heads fall exactly on a stop.
   const head = Math.PI / 2 + rotation;
   const gradient = ctx.createConicGradient(head, 0, 0);
   for (let i = 0; i <= COMET_STOPS; i++) {
     const t = i / COMET_STOPS;
-    // How far behind the nearest head ahead of it this point is, as a fraction
-    // of the gap between heads. The conic sweeps clockwise, so a clockwise
-    // comet's tail is behind it at 1 - t.
-    let behind = ((clockwise ? 1 - t : t) * COMETS) % 1;
-    if (behind > 1 - COMET_LEAD) behind -= 1;
-    let alpha: number;
-    if (behind < 0) alpha = (behind + COMET_LEAD) / COMET_LEAD;
-    else if (behind < COMET_TAIL) alpha = (1 - behind / COMET_TAIL) ** 2;
-    else alpha = 0;
+    const { comet, alpha } = cometAt(head + t * Math.PI * 2, rotation, clockwise);
+    const [r, g, b] = rgb[comet];
     gradient.addColorStop(t, `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(4)})`);
   }
   return gradient;
@@ -350,6 +400,7 @@ export function deriveHaloParams(
     radiusX: halo.horizontalRadius * scale * canvasSize.width,
     radiusY: halo.verticalRadius * scale * canvasSize.height,
     color: halo.color,
+    secondColor: halo.secondColor,
     opacity,
     style: halo.style,
     // Tied to video time rather than wall-clock time, so the same frame always
