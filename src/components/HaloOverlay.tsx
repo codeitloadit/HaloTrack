@@ -5,7 +5,7 @@ interface HaloOverlayProps {
   width: number;
   height: number;
   params: HaloDrawParams | null;
-  /** When set (and the ring is rainbow), spins the gradient live so the speed can be judged on a paused frame. */
+  /** Spins a rainbow or comet live, so the speed can be judged on a paused frame. */
   rotationSpeed?: number;
 }
 
@@ -29,7 +29,7 @@ export default function HaloOverlay({ width, height, params, rotationSpeed = 0 }
       if (params) drawHalo(ctx!, { ...params, rotation: params.rotation + spinRef.current });
     }
 
-    if (!params?.rainbow || rotationSpeed === 0) {
+    if (!params || params.style === "solid" || rotationSpeed === 0) {
       draw();
       return;
     }

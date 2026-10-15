@@ -24,12 +24,12 @@ export interface HaloConfig {
   offsetY: number;
   color: string;
   opacity: number;
-  rainbow: boolean;
-  /** Revolutions per second of the rainbow gradient; the sign sets direction. */
+  style: HaloStyle;
+  /** Revolutions per second of the rainbow or comet; the sign sets direction. */
   rotationSpeed: number;
-  /** 0 = no glow, 0.5 = default, 1 = maximum. */
-  glow: number;
 }
+
+export type HaloStyle = "solid" | "rainbow" | "comet";
 
 export interface PlaybackState {
   currentTime: number;
@@ -48,5 +48,4 @@ export interface AppState {
 export const STEP_SECONDS = 0.5;
 export const MIN_INDICATOR_HEIGHT = 0.03;
 export const DEFAULT_HALO_OPACITY = 0.5;
-export const DEFAULT_HALO_GLOW = 0.5;
 export const DEFAULT_HALO_OFFSET_Y = 0.008;

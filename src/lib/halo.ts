@@ -1,5 +1,5 @@
 import { bracket, interpolateIndicator } from "./keyframes";
-import type { HaloConfig, TrackKeyframe } from "../state/types";
+import type { HaloConfig, HaloStyle, TrackKeyframe } from "../state/types";
 
 export interface HaloDrawParams {
   centerX: number;
@@ -8,11 +8,11 @@ export interface HaloDrawParams {
   radiusY: number;
   color: string;
   opacity: number;
-  rainbow: boolean;
-  /** Radians the rainbow gradient is turned from its starting position. */
+  style: HaloStyle;
+  /** Radians the rainbow or comet is turned from its starting position. */
   rotation: number;
-  /** 0 = no glow, 0.5 = default, 1 = maximum. */
-  glow: number;
+  /** Which way the comet is heading; its tail trails the other way. */
+  clockwise: boolean;
 }
 
 const RING_POINTS = 360;
@@ -124,7 +124,12 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
   }
   path.closePath();
 
-  lctx.fillStyle = p.rainbow ? rainbowGradient(lctx, p.rotation) : p.color;
+  lctx.fillStyle =
+    p.style === "rainbow"
+      ? rainbowGradient(lctx, p.rotation)
+      : p.style === "comet"
+        ? cometGradient(lctx, p.color, p.rotation, p.clockwise)
+        : p.color;
   lctx.fill(path, "evenodd");
 
   if (typeof lctx.createConicGradient === "function") {
@@ -141,19 +146,15 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
     lctx.globalCompositeOperation = "source-over";
   }
 
-  // The glow setting scales how far the glow spreads (0.5x-1.5x of the base size)
-  // and how strongly it's layered on (0-2x); the default 0.5 is 1x of each.
-  const glowBlur = Math.max(10, p.radiusY * 0.8) * (0.5 + p.glow) * res;
-  const glowStrength = p.glow * 2;
-
-  if (glowStrength > 0) {
+  const glowBlur = Math.max(10, p.radiusY * 0.8) * GLOW_SPREAD * res;
+  {
     const glow = renderGlow(layer, layerW, layerH, glowBlur, p);
     if (glow) {
       const [glowCanvas, pad] = glow;
       const padUser = pad / res;
       ctx.save();
-      for (let remaining = glowStrength; remaining > 0; remaining -= 1) {
-        ctx.globalAlpha = p.opacity * Math.min(1, remaining);
+      ctx.globalAlpha = p.opacity;
+      for (let i = 0; i < GLOW_PASSES; i++) {
         ctx.drawImage(
           glowCanvas,
           0,
@@ -177,6 +178,9 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
   ctx.restore();
 }
 
+// The glow spreads 1.5x the base size and is layered on twice.
+const GLOW_SPREAD = 1.5;
+const GLOW_PASSES = 2;
 const GLOW_HUES = 6;
 
 /**
@@ -217,9 +221,9 @@ function renderGlow(
     actx.drawImage(source, pad + offset, pad);
   };
 
-  const rainbow = p.rainbow && typeof actx.createConicGradient === "function";
+  const rainbow = p.style === "rainbow" && typeof actx.createConicGradient === "function";
   if (!rainbow) {
-    castShadow(ring, p.rainbow ? "#ff3b30" : p.color);
+    castShadow(ring, p.style === "rainbow" ? "#ff3b30" : p.color);
     return [accCanvas, pad];
   }
 
@@ -253,6 +257,47 @@ function renderGlow(
     castShadow(sectionCanvas, `hsl(${(k / GLOW_HUES) * 360}, 100%, 55%)`);
   }
   return [accCanvas, pad];
+}
+
+const COMET_TAIL = 0.7;
+const COMET_LEAD = 0.015;
+const COMET_STOPS = 360;
+
+/**
+ * The comet's head is fully opaque, with a short soft leading edge in front,
+ * and its tail fades out behind it over COMET_TAIL of the ring. It starts at the
+ * bottom (nearest the viewer).
+ */
+function cometGradient(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  rotation: number,
+  clockwise: boolean,
+): CanvasGradient | string {
+  if (typeof ctx.createConicGradient !== "function") return color;
+  const [r, g, b] = hexToRgb(color);
+  const head = Math.PI / 2 + rotation;
+  const gradient = ctx.createConicGradient(head, 0, 0);
+  for (let i = 0; i <= COMET_STOPS; i++) {
+    const t = i / COMET_STOPS;
+    // How far behind the head this point is, as a fraction of the ring. The
+    // conic sweeps clockwise, so a clockwise comet's tail is behind it at 1 - t.
+    let behind = clockwise ? 1 - t : t;
+    if (behind > 1 - COMET_LEAD) behind -= 1;
+    let alpha: number;
+    if (behind < 0) alpha = (behind + COMET_LEAD) / COMET_LEAD;
+    else if (behind < COMET_TAIL) alpha = (1 - behind / COMET_TAIL) ** 2;
+    else alpha = 0;
+    gradient.addColorStop(t, `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(4)})`);
+  }
+  return gradient;
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 function rainbowGradient(ctx: CanvasRenderingContext2D, rotation: number): CanvasGradient | string {
@@ -302,10 +347,10 @@ export function deriveHaloParams(
     radiusY: halo.verticalRadius * scale * canvasSize.height,
     color: halo.color,
     opacity,
-    rainbow: halo.rainbow,
+    style: halo.style,
     // Tied to video time rather than wall-clock time, so the same frame always
     // gets the same rotation in preview and export.
     rotation: 2 * Math.PI * halo.rotationSpeed * t,
-    glow: halo.glow,
+    clockwise: halo.rotationSpeed >= 0,
   };
 }
