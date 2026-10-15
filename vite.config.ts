@@ -1,10 +1,24 @@
+import { execSync } from 'node:child_process'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+function commitHash(): string {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return 'unknown'
+  }
+}
+
+const buildNumber = process.env.GITHUB_RUN_NUMBER
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/HaloTrack/',
+  define: {
+    __APP_VERSION__: JSON.stringify(`${buildNumber ? `Build ${buildNumber}` : 'dev'} · ${commitHash()}`),
+  },
   plugins: [
     react(),
     VitePWA({

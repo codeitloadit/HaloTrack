@@ -41,6 +41,7 @@ export default function ImportPhase() {
         <IconImport size={22} />
         <span>Import Video</span>
       </button>
+      <div className="app-version">{__APP_VERSION__}</div>
     </div>
   );
 }
