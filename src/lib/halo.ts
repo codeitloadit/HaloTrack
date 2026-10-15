@@ -10,7 +10,8 @@ export interface HaloDrawParams {
   opacity: number;
 }
 
-const RING_SEGMENTS = 64;
+const RING_POINTS = 360;
+const FADE_STOPS = 72;
 const TOP_ANGLE = -Math.PI / 2;
 // How wide (in radians) the transparent gap at the top-middle is, and how softly
 // it fades back to full opacity — a player's legs usually pass through this part
@@ -23,38 +24,104 @@ function angularDistance(a: number, b: number): number {
   return d;
 }
 
+let layer: HTMLCanvasElement | null = null;
+
+function getLayer(width: number, height: number): CanvasRenderingContext2D | null {
+  layer ??= document.createElement("canvas");
+  if (layer.width < width) layer.width = width;
+  if (layer.height < height) layer.height = height;
+  return layer.getContext("2d");
+}
+
+/**
+ * Draws the ring as one filled shape on an offscreen layer, then composites that
+ * layer onto `ctx` once with the glow and overall opacity. Drawing it as many
+ * separately-stroked segments instead left visible joints wherever their
+ * translucent ends overlapped.
+ *
+ * The ring is built in "circle space" (y divided by ry/rx) and drawn under a
+ * vertical squash back to the ellipse, so conic gradients — the top fade here,
+ * and any future colour gradient or rotation — sweep around the ring's
+ * perspective angle rather than being stretched by the flattened ellipse.
+ */
 export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void {
   if (p.opacity <= 0.001 || p.radiusX <= 0 || p.radiusY <= 0) return;
   const baseWidth = Math.max(4, p.radiusY * 0.35);
   const topWidth = baseWidth * 0.7;
   const bottomWidth = baseWidth * 0.8;
 
-  ctx.save();
-  ctx.filter = "blur(2px)";
-  ctx.strokeStyle = p.color;
-  ctx.shadowColor = p.color;
-  ctx.shadowBlur = Math.max(10, p.radiusY * 0.8);
-  ctx.lineCap = "round";
+  // Render the layer at the destination's device resolution so it stays sharp
+  // on high-DPI canvases.
+  const m = ctx.getTransform();
+  const res = Math.max(1, Math.hypot(m.a, m.b));
+  const margin = bottomWidth + 4;
+  const halfW = p.radiusX + margin;
+  const halfH = p.radiusY + margin;
+  const layerW = Math.ceil(halfW * 2 * res);
+  const layerH = Math.ceil(halfH * 2 * res);
+  const lctx = getLayer(layerW, layerH);
+  if (!lctx) return;
 
-  for (let i = 0; i < RING_SEGMENTS; i++) {
-    const a0 = (i / RING_SEGMENTS) * Math.PI * 2;
-    const a1 = ((i + 1) / RING_SEGMENTS) * Math.PI * 2;
-    const mid = (a0 + a1) / 2;
+  const squash = p.radiusY / p.radiusX;
+  lctx.setTransform(1, 0, 0, 1, 0, 0);
+  lctx.globalCompositeOperation = "source-over";
+  lctx.clearRect(0, 0, layerW, layerH);
+  lctx.setTransform(res, 0, 0, res * squash, halfW * res, halfH * res);
 
-    // 0 at the top, 1 at the bottom — gives the ring depth by tapering the far
-    // (top) side thinner than the near (bottom) side.
-    const verticalFactor = (Math.sin(mid) + 1) / 2;
-    const width = topWidth + (bottomWidth - topWidth) * verticalFactor;
+  const path = new Path2D();
+  const inner: [number, number][] = [];
+  for (let i = 0; i <= RING_POINTS; i++) {
+    const theta = (i / RING_POINTS) * Math.PI * 2;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    // 0 at the top, 1 at the bottom — tapers the far (top) side thinner than the
+    // near (bottom) side for a sense of depth.
+    const width = topWidth + (bottomWidth - topWidth) * ((sin + 1) / 2);
+    // Offset along the ellipse's on-screen normal so the width is in screen
+    // pixels, then convert y back into circle space.
+    const nx = cos / p.radiusX;
+    const ny = sin / p.radiusY;
+    const nLen = Math.hypot(nx, ny);
+    const ox = (nx / nLen) * (width / 2);
+    const oy = (ny / nLen) * (width / 2);
+    const x = p.radiusX * cos;
+    const y = p.radiusY * sin;
+    if (i === 0) path.moveTo(x + ox, (y + oy) / squash);
+    else path.lineTo(x + ox, (y + oy) / squash);
+    inner.push([x - ox, (y - oy) / squash]);
+  }
+  path.closePath();
+  for (let i = inner.length - 1; i >= 0; i--) {
+    const [x, y] = inner[i];
+    if (i === inner.length - 1) path.moveTo(x, y);
+    else path.lineTo(x, y);
+  }
+  path.closePath();
 
-    const topFade = 1 - Math.exp(-(angularDistance(mid, TOP_ANGLE) ** 2) / (2 * TOP_GAP_SIGMA ** 2));
+  lctx.fillStyle = p.color;
+  lctx.fill(path, "evenodd");
 
-    ctx.globalAlpha = p.opacity * topFade;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.ellipse(p.centerX, p.centerY, p.radiusX, p.radiusY, 0, a0, a1);
-    ctx.stroke();
+  if (typeof lctx.createConicGradient === "function") {
+    const fade = lctx.createConicGradient(0, 0, 0);
+    for (let i = 0; i <= FADE_STOPS; i++) {
+      const t = i / FADE_STOPS;
+      const d = angularDistance(t * Math.PI * 2, TOP_ANGLE);
+      const alpha = 1 - Math.exp(-(d * d) / (2 * TOP_GAP_SIGMA ** 2));
+      fade.addColorStop(t, `rgba(0,0,0,${alpha.toFixed(4)})`);
+    }
+    lctx.globalCompositeOperation = "destination-in";
+    lctx.fillStyle = fade;
+    lctx.fill(path, "evenodd");
+    lctx.globalCompositeOperation = "source-over";
   }
 
+  ctx.save();
+  ctx.globalAlpha = p.opacity;
+  ctx.filter = "blur(1.5px)";
+  ctx.shadowColor = p.color;
+  // Shadows ignore the current transform, so scale the glow to device pixels.
+  ctx.shadowBlur = Math.max(10, p.radiusY * 0.8) * res;
+  ctx.drawImage(layer!, 0, 0, layerW, layerH, p.centerX - halfW, p.centerY - halfH, halfW * 2, halfH * 2);
   ctx.restore();
 }
 
