@@ -1,9 +1,11 @@
 import {
+  convergesWith,
   createTracker,
   isGridTime,
   sampleTimes,
   toKeyframe,
   trackPass,
+  trackerFromKeyframe,
   type Detection,
   type FrameSize,
   type Rect,
@@ -89,35 +91,50 @@ export async function openSession(project: Project): Promise<AutoTrackSession> {
   };
 }
 
+/** Who to track from: a box the user picked, or a keyframe (e.g. marking the player off-screen). */
+export type AutoTrackSeed = { box: Rect } | { keyframe: TrackKeyframe };
+
 /**
- * Tracks the player picked at `seed` (time `t0`) forwards to the end of the
- * video and backwards to the start, returning auto-flagged keyframes for every
- * tracking step that doesn't already have one set by hand.
+ * Tracks the player from `seed` at time `t0` forwards to the end of the video
+ * and, unless `forwardOnly`, backwards to the start. Returns the seed itself as
+ * a hand-set keyframe plus auto-flagged keyframes for every other step that
+ * doesn't already have one set by hand. A forward-only run is a rerun over
+ * steps already tracked, so it stops once it agrees with them again.
  */
 export async function runAutoTrack(
   session: AutoTrackSession,
-  seed: Rect,
+  seed: AutoTrackSeed,
   t0: number,
   duration: number,
   existing: TrackKeyframe[],
+  forwardOnly: boolean,
   signal: AbortSignal,
   onProgress: (fraction: number) => void,
 ): Promise<TrackKeyframe[]> {
   const manual = new Map(existing.filter((k) => !k.auto).map((k) => [k.timestamp, k]));
   const forward = sampleTimes(t0, duration);
-  const backward = t0 > 0 ? sampleTimes(t0, 0) : [t0];
+  const backward = !forwardOnly && t0 > 0 ? sampleTimes(t0, 0) : [t0];
   const total = forward.length + backward.length - 2;
   let done = 0;
   const onSample = () => onProgress(total > 0 ? ++done / total : 1);
   const detect = (region: Rect, t: number) => session.detect(region, t);
+  const newTracker = () =>
+    "box" in seed ? createTracker(seed.box, session.frame) : trackerFromKeyframe(seed.keyframe, session.frame);
 
   const out: TrackKeyframe[] = [];
-  const seedTracker = createTracker(seed, session.frame);
   const seedIsManual = [...manual.keys()].some((t) => Math.abs(t - t0) < 1e-6);
-  if (isGridTime(t0, duration) && !seedIsManual) out.push(toKeyframe(t0, seedTracker, false));
+  if (isGridTime(t0, duration) && !seedIsManual) {
+    if ("box" in seed) {
+      const { auto: _, ...picked } = toKeyframe(t0, newTracker(), false);
+      out.push(picked);
+    } else {
+      out.push({ ...seed.keyframe, timestamp: t0 });
+    }
+  }
 
-  out.push(...(await trackPass(createTracker(seed, session.frame), forward, duration, manual, detect, onSample, signal)));
-  out.push(...(await trackPass(createTracker(seed, session.frame), backward, duration, manual, detect, onSample, signal)));
+  const until = forwardOnly ? convergesWith(existing) : undefined;
+  out.push(...(await trackPass(newTracker(), forward, duration, manual, detect, onSample, signal, until)));
+  out.push(...(await trackPass(newTracker(), backward, duration, manual, detect, onSample, signal)));
 
   return out;
 }

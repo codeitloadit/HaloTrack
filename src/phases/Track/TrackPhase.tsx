@@ -5,7 +5,7 @@ import KeyframeStrip from "../../components/KeyframeStrip";
 import PhaseNav from "../../components/PhaseNav";
 import PickOverlay from "../../components/PickOverlay";
 import VideoStage from "../../components/VideoStage";
-import { IconAutoTrack, IconCheck, IconChevronLeft, IconChevronRight, IconClose, IconTrash } from "../../components/icons";
+import { IconAutoTrack, IconCheck, IconChevronLeft, IconChevronRight, IconClose, IconOffscreen, IconSkip, IconTrash } from "../../components/icons";
 import type { ContentBox } from "../../lib/geometry";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
 import { useAutoTrack, type AutoTrackStatus } from "./useAutoTrack";
@@ -71,22 +71,36 @@ export default function TrackPhase() {
   }
 
   if (!state.project) return null;
+  const picking = auto.status.phase === "picking" ? auto.status : null;
 
   return (
     <div className="phase-container">
       <VideoStage src={state.project.objectUrl} initialTime={controller.cursor} ref={videoRef}>
         {(box) => {
           boxRef.current = box;
+          const indicator = (
+            <IndicatorOverlay
+              headY={controller.indicator.headY}
+              feetY={controller.indicator.feetY}
+              centerX={controller.indicator.centerX}
+              offscreen={controller.offscreen}
+              width={box.width}
+              height={box.height}
+            />
+          );
           if (auto.status.phase === "picking") {
             return (
-              <PickOverlay
+              <>
+                {auto.status.followUp && <div className="pick-guess">{indicator}</div>}
+                <PickOverlay
                 boxes={auto.status.boxes}
                 frame={{ w: state.project!.width, h: state.project!.height }}
                 width={box.width}
                 height={box.height}
                 flash={auto.status.flash}
                 onPick={auto.pick}
-              />
+                />
+              </>
             );
           }
           if (auto.busy) return null;
@@ -99,14 +113,7 @@ export default function TrackPhase() {
               onPan={(dx, dy) => controller.applyPan(dx, dy, box.width, box.height)}
               onRelease={() => controller.scheduleCommit()}
             >
-              <IndicatorOverlay
-                headY={controller.indicator.headY}
-                feetY={controller.indicator.feetY}
-                centerX={controller.indicator.centerX}
-                offscreen={controller.offscreen}
-                width={box.width}
-                height={box.height}
-              />
+              {indicator}
             </GestureSurface>
           );
         }}
@@ -132,24 +139,48 @@ export default function TrackPhase() {
         >
           <IconChevronLeft />
         </button>
-        <button
-          type="button"
-          className="icon-btn icon-btn-primary icon-btn-lg"
-          onClick={controller.commitNow}
-          disabled={auto.busy}
-          aria-label="confirm"
-        >
-          <IconCheck />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={controller.stepNext}
-          disabled={auto.busy || !controller.canStepNext}
-          aria-label="next frame"
-        >
-          <IconChevronRight />
-        </button>
+        {picking ? (
+          <button
+            type="button"
+            className="icon-btn icon-btn-primary icon-btn-lg"
+            onClick={auto.pickOffscreen}
+            disabled={!picking.offscreenRef}
+            aria-label="player off-screen"
+          >
+            <IconOffscreen />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="icon-btn icon-btn-primary icon-btn-lg"
+            onClick={controller.commitNow}
+            disabled={auto.busy}
+            aria-label="confirm"
+          >
+            <IconCheck />
+          </button>
+        )}
+        {picking ? (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={auto.skip}
+            disabled={!picking.followUp}
+            aria-label="skip to next unsure step"
+          >
+            <IconSkip />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={controller.stepNext}
+            disabled={auto.busy || !controller.canStepNext}
+            aria-label="next frame"
+          >
+            <IconChevronRight />
+          </button>
+        )}
         <button
           type="button"
           className={`icon-btn track-clear-btn${clearArmed ? " track-clear-armed" : ""}`}

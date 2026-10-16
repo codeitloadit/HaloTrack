@@ -146,6 +146,25 @@ export function IconTrash({ size = 20 }: IconProps) {
   );
 }
 
+export function IconOffscreen({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M4 20L20 4" />
+    </svg>
+  );
+}
+
+export function IconSkip({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M6 6l7 6-7 6" />
+      <path d="M17 6v12" />
+    </svg>
+  );
+}
+
 export function IconClose({ size = 20 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>

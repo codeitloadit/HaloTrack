@@ -56,6 +56,11 @@ const MISSES_BEFORE_FULL_SEARCH = 4;
 const EDGE_MARGIN = 0.03;
 const REENTRY_EDGE = 0.05;
 const OFFSCREEN_CENTER_X = 0.05;
+/** Width/height of a standing person's box, for trackers started without one. */
+const PERSON_ASPECT = 0.4;
+/** Consecutive confident steps agreeing with an earlier run before a rerun stops. */
+const CONVERGED_STEPS = 2;
+const CONVERGED_TOLERANCE = 0.015;
 
 export function centre(r: Rect): { x: number; y: number } {
   return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
@@ -215,6 +220,36 @@ export function toKeyframe(t: number, tracker: Tracker, low: boolean): TrackKeyf
   return { timestamp: t, ...clampIndicator({ headY, feetY, centerX }), offscreen: false, auto: low ? "low" : "ok" };
 }
 
+/** Starts a tracker from a keyframe set by hand rather than a detected box. */
+export function trackerFromKeyframe(k: TrackKeyframe, frame: FrameSize): Tracker {
+  const h = (k.feetY - k.headY) * frame.h;
+  const tracker = createTracker({ x: 0, y: 0, w: h * PERSON_ASPECT, h }, frame);
+  reseedFromKeyframe(tracker, k);
+  return tracker;
+}
+
+/**
+ * For a rerun over steps an earlier run already tracked: true once the rerun has
+ * agreed with the earlier run's confident keyframes for a couple of steps in a
+ * row, after which it would just reproduce them.
+ */
+export function convergesWith(earlier: TrackKeyframe[]): (k: TrackKeyframe) => boolean {
+  let streak = 0;
+  return (k) => {
+    const e = earlier.find((x) => Math.abs(x.timestamp - k.timestamp) < 1e-6);
+    const agrees =
+      e !== undefined &&
+      e.auto === "ok" &&
+      k.auto === "ok" &&
+      e.offscreen === k.offscreen &&
+      Math.abs(e.headY - k.headY) <= CONVERGED_TOLERANCE &&
+      Math.abs(e.feetY - k.feetY) <= CONVERGED_TOLERANCE &&
+      Math.abs(e.centerX - k.centerX) <= CONVERGED_TOLERANCE;
+    streak = agrees ? streak + 1 : 0;
+    return streak >= CONVERGED_STEPS;
+  };
+}
+
 /** Re-seeds the tracker from a keyframe set by hand, keeping the box's width/height ratio. */
 export function reseedFromKeyframe(tracker: Tracker, k: TrackKeyframe): void {
   const { frame } = tracker;
@@ -233,7 +268,8 @@ export function reseedFromKeyframe(tracker: Tracker, k: TrackKeyframe): void {
  * `detect` for each sample's search region. Emits a keyframe at each tracking
  * step, skipping steps that already have a keyframe set by hand (which instead
  * re-seed the tracker). A step is low confidence if its own sample, or any
- * sample since the previous step, was uncertain or missed.
+ * sample since the previous step, was uncertain or missed. Stops early once
+ * `until` returns true for an emitted keyframe.
  */
 export async function trackPass(
   tracker: Tracker,
@@ -243,6 +279,7 @@ export async function trackPass(
   detect: (region: Rect, t: number) => Promise<Detection[] | null>,
   onSample: () => void,
   signal: AbortSignal,
+  until?: (k: TrackKeyframe) => boolean,
 ): Promise<TrackKeyframe[]> {
   const out: TrackKeyframe[] = [];
   let lowSinceStep = false;
@@ -262,8 +299,10 @@ export async function trackPass(
     update(tracker, obs, dt);
     lowSinceStep ||= obs.kind === "lost" || (obs.kind === "match" && obs.low);
     if (isGridTime(t, duration)) {
-      out.push(toKeyframe(t, tracker, lowSinceStep));
+      const k = toKeyframe(t, tracker, lowSinceStep);
+      out.push(k);
       lowSinceStep = false;
+      if (until?.(k)) break;
     }
     onSample();
   }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  convergesWith,
   createTracker,
   pickTarget,
   sampleTimes,
   trackPass,
+  trackerFromKeyframe,
   type Detection,
   type FrameSize,
   type Rect,
@@ -126,5 +128,41 @@ describe("trackPass", () => {
     const keyframes = await run(scene, 2, manual);
     expect(keyframes.map((k) => k.timestamp)).toEqual([0.5, 1.5, 2]);
     expect(keyframes[2].centerX).toBeCloseTo(520 / frame.w, 2);
+  });
+});
+
+describe("reruns", () => {
+  const walking = (t: number) => [person(200 + t * 100, 600)];
+
+  it("stop once they agree with the earlier run for two confident steps", async () => {
+    const earlier = await run(walking, 4);
+    const until = convergesWith(earlier);
+    const tracker = createTracker(walking(1)[0], frame);
+    const keyframes = await trackPass(tracker, sampleTimes(1, 4), 4, new Map(), detector(walking), () => {}, new AbortController().signal, until);
+    expect(keyframes.map((k) => k.timestamp)).toEqual([1.5, 2]);
+  });
+
+  it("keep going while they disagree with the earlier run", () => {
+    const k = (timestamp: number, centerX: number, auto: "ok" | "low" = "ok"): TrackKeyframe => ({
+      timestamp, headY: 0.3, feetY: 0.6, centerX, offscreen: false, auto,
+    });
+    const until = convergesWith([k(1, 0.5), k(1.5, 0.5, "low"), k(2, 0.5), k(2.5, 0.5)]);
+    expect(until(k(1, 0.5))).toBe(false);
+    expect(until(k(1.5, 0.5))).toBe(false); // the earlier step was unsure, so it doesn't count
+    expect(until(k(2, 0.6))).toBe(false); // somewhere else
+    expect(until(k(2.5, 0.5))).toBe(false);
+  });
+
+  it("can start from the player marked off-screen and pick them up coming back in", async () => {
+    // Off-screen to the right until t=1.5, then walks in from the right edge.
+    const scene = (t: number) => (t < 1.5 ? [] : [person(690 - (t - 1.5) * 100, 600)]);
+    const seed: TrackKeyframe = { timestamp: 0, headY: 450 / frame.h, feetY: 750 / frame.h, centerX: 1.05, offscreen: true };
+    const tracker = trackerFromKeyframe(seed, frame);
+    const keyframes = await trackPass(tracker, sampleTimes(0, 3), 3, new Map(), detector(scene), () => {}, new AbortController().signal);
+    const at = (t: number) => keyframes.find((k) => k.timestamp === t)!;
+    expect(at(1).offscreen).toBe(true);
+    expect(at(1).centerX).toBeGreaterThan(1);
+    expect(at(3).offscreen).toBe(false);
+    expect(at(3).centerX).toBeCloseTo(540 / frame.w, 1);
   });
 });
