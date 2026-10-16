@@ -3,7 +3,7 @@ import { pickTarget, type Rect } from "../../lib/autoTrack";
 import { openSession, runAutoTrack, type AutoTrackSeed, type AutoTrackSession } from "../../lib/autoTrackRunner";
 import { mergeAutoKeyframes } from "../../lib/keyframes";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
-import type { TrackKeyframe } from "../../state/types";
+import { STEP_SECONDS, type TrackKeyframe } from "../../state/types";
 import type { useTrackController } from "./useTrackController";
 
 export type AutoTrackStatus =
@@ -48,7 +48,8 @@ function nextLowAfter(keyframes: TrackKeyframe[], t: number): TrackKeyframe | un
 
 /**
  * Drives auto-tracking: load the detector, show who's in the current frame and
- * track whoever gets tapped. After each run it moves to the next unsure step
+ * track whoever gets tapped from there on, replacing what was tracked after it
+ * (so starting on any frame switches to a different player). After each run it moves to the next unsure step
  * and asks again, retracking only from there on, until none are left. Every
  * pick becomes a hand-set keyframe. Cancelling (or the app going to the
  * background) keeps whatever earlier runs already produced.
@@ -132,8 +133,8 @@ export function useAutoTrack(controller: ReturnType<typeof useTrackController>) 
     setStatus({ phase: "running", progress: 0 });
     let lastPercent = 0;
     const session = chain.session!;
-    const result = await inFlight(chain, () =>
-      runAutoTrack(session, seed, t0, project.durationSec, keyframesRef.current, followUp, chain.abort.signal, (p) => {
+    const { keyframes: result, from } = await inFlight(chain, () =>
+      runAutoTrack(session, seed, t0, project.durationSec, keyframesRef.current, followUp ? "followUp" : "pick", chain.abort.signal, (p) => {
         const percent = Math.floor(p * 100);
         if (percent === lastPercent || chain.abort.signal.aborted) return;
         lastPercent = percent;
@@ -142,8 +143,8 @@ export function useAutoTrack(controller: ReturnType<typeof useTrackController>) 
     );
     const merged = mergeAutoKeyframes(keyframesRef.current, result);
     dispatch({ type: "MERGE_AUTO_KEYFRAMES", keyframes: result });
-    // A first run also tracks backwards, so its unsure steps can come before the pick.
-    const next = followUp ? nextLowAfter(merged, t0) : merged.find((k) => k.auto === "low");
+    // Only this run's unsure steps; a pick can track backwards, so they can come before it.
+    const next = nextLowAfter(merged, from - STEP_SECONDS / 2);
     await moveOn(chain, next, merged, t0);
   }
 

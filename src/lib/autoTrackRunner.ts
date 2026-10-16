@@ -95,11 +95,23 @@ export async function openSession(project: Project): Promise<AutoTrackSession> {
 export type AutoTrackSeed = { box: Rect } | { keyframe: TrackKeyframe };
 
 /**
- * Tracks the player from `seed` at time `t0` forwards to the end of the video
- * and, unless `forwardOnly`, backwards to the start. Returns the seed itself as
- * a hand-set keyframe plus auto-flagged keyframes for every other step that
- * doesn't already have one set by hand. A forward-only run is a rerun over
- * steps already tracked, so it stops once it agrees with them again.
+ * - `pick`: the user chose who to track at `t0`. Everything after it is
+ *   retracked; before it, only untracked steps back to the nearest tracked one.
+ * - `followUp`: a rerun from an unsure step over steps already tracked, so it
+ *   only goes forwards and stops once it agrees with them again.
+ */
+export type AutoTrackMode = "pick" | "followUp";
+
+export interface AutoTrackResult {
+  keyframes: TrackKeyframe[];
+  /** The earliest step the run covered. */
+  from: number;
+}
+
+/**
+ * Tracks the player from `seed` at time `t0`. Returns the seed itself as a
+ * hand-set keyframe plus auto-flagged keyframes for the other steps covered,
+ * leaving out any steps set by hand (which instead re-seed the tracker).
  */
 export async function runAutoTrack(
   session: AutoTrackSession,
@@ -107,13 +119,17 @@ export async function runAutoTrack(
   t0: number,
   duration: number,
   existing: TrackKeyframe[],
-  forwardOnly: boolean,
+  mode: AutoTrackMode,
   signal: AbortSignal,
   onProgress: (fraction: number) => void,
-): Promise<TrackKeyframe[]> {
-  const manual = new Map(existing.filter((k) => !k.auto).map((k) => [k.timestamp, k]));
+): Promise<AutoTrackResult> {
+  const atSeed = (t: number) => Math.abs(t - t0) < 1e-6;
+  const manual = new Map(existing.filter((k) => !k.auto && !atSeed(k.timestamp)).map((k) => [k.timestamp, k]));
+  const trackedBefore = existing.filter((k) => k.timestamp < t0 - 1e-6).map((k) => k.timestamp);
+  const backwardTo = trackedBefore.length > 0 ? Math.max(...trackedBefore) : 0;
+
   const forward = sampleTimes(t0, duration);
-  const backward = !forwardOnly && t0 > 0 ? sampleTimes(t0, 0) : [t0];
+  const backward = mode === "pick" && t0 > backwardTo ? sampleTimes(t0, backwardTo) : [t0];
   const total = forward.length + backward.length - 2;
   let done = 0;
   const onSample = () => onProgress(total > 0 ? ++done / total : 1);
@@ -122,8 +138,7 @@ export async function runAutoTrack(
     "box" in seed ? createTracker(seed.box, session.frame) : trackerFromKeyframe(seed.keyframe, session.frame);
 
   const out: TrackKeyframe[] = [];
-  const seedIsManual = [...manual.keys()].some((t) => Math.abs(t - t0) < 1e-6);
-  if (isGridTime(t0, duration) && !seedIsManual) {
+  if (isGridTime(t0, duration)) {
     if ("box" in seed) {
       const { auto: _, ...picked } = toKeyframe(t0, newTracker(), false);
       out.push(picked);
@@ -132,9 +147,11 @@ export async function runAutoTrack(
     }
   }
 
-  const until = forwardOnly ? convergesWith(existing) : undefined;
+  const until = mode === "followUp" ? convergesWith(existing) : undefined;
   out.push(...(await trackPass(newTracker(), forward, duration, manual, detect, onSample, signal, until)));
-  out.push(...(await trackPass(newTracker(), backward, duration, manual, detect, onSample, signal)));
+  const earlier = await trackPass(newTracker(), backward, duration, manual, detect, onSample, signal);
+  // The backward pass ends on the nearest step already tracked, which stays as it is.
+  out.push(...earlier.filter((k) => !trackedBefore.some((t) => Math.abs(t - k.timestamp) < 1e-6)));
 
-  return out;
+  return { keyframes: out, from: Math.min(t0, ...out.map((k) => k.timestamp)) };
 }
