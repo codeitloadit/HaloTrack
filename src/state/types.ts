@@ -16,11 +16,11 @@ export interface TrackKeyframe {
   feetY: number;
   centerX: number;
   offscreen: boolean;
-  /** Set when filled in by auto-tracking; absent for keyframes set by hand. */
-  auto?: "ok" | "low";
 }
 
+/** Sizes and offsets are in player heights (head line to feet line), so the ring keeps its proportions to the player. */
 export interface HaloConfig {
+  /** The tracked step the Halo screen shows the ring on. */
   referenceTimestamp: number;
   horizontalRadius: number;
   verticalRadius: number;
@@ -56,4 +56,4 @@ export const STEP_SECONDS = 0.5;
 export const TRACK_END_EPSILON = 1e-3;
 export const MIN_INDICATOR_HEIGHT = 0.03;
 export const DEFAULT_HALO_OPACITY = 0.5;
-export const DEFAULT_HALO_OFFSET_Y = 0.008;
+export const DEFAULT_HALO_OFFSET_Y = 0.03;

@@ -40,7 +40,6 @@ export default function KeyframeStrip({ keyframes, current, reference, duration,
         const classes = [
           "keyframe-dot",
           !k && "empty",
-          k?.auto && `auto auto-${k.auto}`,
           isCurrent && "current",
           isReference && "reference",
           k?.offscreen && "offscreen",

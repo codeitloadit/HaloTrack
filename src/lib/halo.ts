@@ -398,12 +398,6 @@ export function indicatorHeight(headY: number, feetY: number): number {
   return feetY - headY;
 }
 
-export function scaleFactorAt(keyframes: TrackKeyframe[], t: number, referenceIndicatorHeight: number): number {
-  if (referenceIndicatorHeight <= 0) return 1;
-  const { headY, feetY } = interpolateIndicator(keyframes, t);
-  return indicatorHeight(headY, feetY) / referenceIndicatorHeight;
-}
-
 export function haloOpacityAt(keyframes: TrackKeyframe[], t: number, baseOpacity: number): number {
   const { k0, k1, frac } = bracket(keyframes, t);
   const v0 = k0.offscreen ? 0 : 1;
@@ -418,17 +412,15 @@ export function deriveHaloParams(
   halo: HaloConfig,
   canvasSize: { width: number; height: number },
 ): HaloDrawParams {
-  const referenceIndicator = interpolateIndicator(keyframes, halo.referenceTimestamp);
-  const referenceHeight = indicatorHeight(referenceIndicator.headY, referenceIndicator.feetY);
-  const scale = scaleFactorAt(keyframes, t, referenceHeight);
-  const { feetY, centerX } = interpolateIndicator(keyframes, t);
+  const { headY, feetY, centerX } = interpolateIndicator(keyframes, t);
+  const playerHeight = indicatorHeight(headY, feetY) * canvasSize.height;
   const opacity = haloOpacityAt(keyframes, t, halo.opacity);
 
   return {
-    centerX: (centerX + halo.offsetX * scale) * canvasSize.width,
-    centerY: (feetY + halo.offsetY * scale) * canvasSize.height,
-    radiusX: halo.horizontalRadius * scale * canvasSize.width,
-    radiusY: halo.verticalRadius * scale * canvasSize.height,
+    centerX: centerX * canvasSize.width + halo.offsetX * playerHeight,
+    centerY: feetY * canvasSize.height + halo.offsetY * playerHeight,
+    radiusX: halo.horizontalRadius * playerHeight,
+    radiusY: halo.verticalRadius * playerHeight,
     color: halo.color,
     secondColor: halo.secondColor,
     opacity,

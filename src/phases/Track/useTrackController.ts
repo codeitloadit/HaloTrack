@@ -29,8 +29,6 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [complete, setComplete] = useState(false);
-  // Whether the indicator has been moved by hand since arriving at this step.
-  const [touched, setTouched] = useState(false);
 
   function seekAndLoad(timestamp: number, source: TrackKeyframe[]) {
     if (videoRef.current) void seekTo(videoRef.current, timestamp);
@@ -58,7 +56,6 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
         centerX: prev.centerX + panXNorm,
       });
     });
-    setTouched(true);
     resetDebounce();
   }
 
@@ -70,7 +67,6 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
         centerX: prev.centerX + dx / boxWidth,
       }),
     );
-    setTouched(true);
     resetDebounce();
   }
 
@@ -96,7 +92,6 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
       offscreen: isOffscreen(indicator.centerX),
     };
     dispatch({ type: "UPSERT_KEYFRAME", keyframe });
-    setTouched(false);
 
     if (!project) return;
     if (trackCursor >= project.durationSec - TRACK_END_EPSILON) {
@@ -127,7 +122,6 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
     dispatch({ type: "SET_TRACK_CURSOR", timestamp });
     seekAndLoad(timestamp, source);
     setComplete(false);
-    setTouched(false);
   }
 
   function stepBy(deltaSeconds: number) {
@@ -143,14 +137,10 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
     cursor: trackCursor,
     duration,
     complete,
-    touched,
-    /** Shows a guess for the current step, to be accepted or adjusted. */
-    showGuess: (k: IndicatorState) => setIndicator({ headY: k.headY, feetY: k.feetY, centerX: k.centerX }),
     applyPinch,
     applyPan,
     scheduleCommit,
     commitNow: commit,
-    cancelPendingCommit: resetDebounce,
     jumpTo,
     stepPrev: () => stepBy(-STEP_SECONDS),
     stepNext: () => stepBy(STEP_SECONDS),

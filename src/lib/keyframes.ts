@@ -65,24 +65,6 @@ export function findNearestKeyframe(keyframes: TrackKeyframe[], t: number): Trac
   return nearest;
 }
 
-const SAME_TIME_EPSILON = 1e-6;
-
-/**
- * Merges an auto-tracking run into existing keyframes: fills empty steps and
- * replaces earlier auto keyframes, but never overwrites a keyframe set by hand.
- * The run's own hand-set keyframe (the player the user just picked) is the
- * exception, and replaces whatever was there.
- */
-export function mergeAutoKeyframes(existing: TrackKeyframe[], incoming: TrackKeyframe[]): TrackKeyframe[] {
-  const result = [...existing];
-  for (const k of incoming) {
-    const i = result.findIndex((e) => Math.abs(e.timestamp - k.timestamp) < SAME_TIME_EPSILON);
-    if (i === -1) result.push(k);
-    else if (result[i].auto || !k.auto) result[i] = k;
-  }
-  return result.sort((a, b) => a.timestamp - b.timestamp);
-}
-
 /** The tracking steps, matching those the Track phase creates by hand. */
 export function gridTimes(duration: number): number[] {
   const times: number[] = [];

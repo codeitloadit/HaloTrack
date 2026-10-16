@@ -17,7 +17,7 @@ export function loadTracking(key: string): TrackKeyframe[] | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed) || !parsed.every(isKeyframe)) return null;
-    return parsed;
+    return parsed.map(({ timestamp, headY, feetY, centerX, offscreen }) => ({ timestamp, headY, feetY, centerX, offscreen }));
   } catch {
     return null;
   }
@@ -47,7 +47,6 @@ function isKeyframe(value: unknown): value is TrackKeyframe {
     typeof k.headY === "number" &&
     typeof k.feetY === "number" &&
     typeof k.centerX === "number" &&
-    typeof k.offscreen === "boolean" &&
-    (k.auto === undefined || k.auto === "ok" || k.auto === "low")
+    typeof k.offscreen === "boolean"
   );
 }

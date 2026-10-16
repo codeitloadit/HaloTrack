@@ -124,17 +124,6 @@ export function IconOpacity({ size = 20 }: IconProps) {
   );
 }
 
-export function IconAutoTrack({ size = 20 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
-      <path d="M4 20L14 10" />
-      <path d="M17 3l.9 2.1L20 6l-2.1.9L17 9l-.9-2.1L14 6l2.1-.9z" />
-      <path d="M8 4l.5 1.5L10 6l-1.5.5L8 8l-.5-1.5L6 6l1.5-.5z" />
-      <path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5z" />
-    </svg>
-  );
-}
-
 export function IconTrash({ size = 20 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
@@ -142,33 +131,6 @@ export function IconTrash({ size = 20 }: IconProps) {
       <path d="M10 11v6M14 11v6" />
       <path d="M6 7l1 13h10l1-13" />
       <path d="M9 7V4h6v3" />
-    </svg>
-  );
-}
-
-export function IconOffscreen({ size = 22 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
-      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M4 20L20 4" />
-    </svg>
-  );
-}
-
-export function IconSkip({ size = 20 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
-      <path d="M6 6l7 6-7 6" />
-      <path d="M17 6v12" />
-    </svg>
-  );
-}
-
-export function IconClose({ size = 20 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
-      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   );
 }

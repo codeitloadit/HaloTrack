@@ -51,38 +51,6 @@ export async function seekTo(video: HTMLVideoElement, t: number): Promise<void> 
 }
 
 /**
- * Seeks and waits until a frame at (about) `t` has actually been presented, so
- * it can be drawn to a canvas. WebKit can report a seek as done before the frame
- * is decoded: drawing then yields a black image. Resolves false if no matching
- * frame arrives within `timeoutMs`.
- */
-export async function seekToFrame(video: HTMLVideoElement, t: number, toleranceSeconds = 0.1, timeoutMs = 500): Promise<boolean> {
-  if (typeof video.requestVideoFrameCallback !== "function") {
-    await seekTo(video, t);
-    return Math.abs(video.currentTime - t) <= toleranceSeconds;
-  }
-  const presented = new Promise<boolean>((resolve) => {
-    let handle = 0;
-    const timer = setTimeout(() => {
-      video.cancelVideoFrameCallback(handle);
-      resolve(false);
-    }, timeoutMs);
-    const onFrame = (_now: number, meta: VideoFrameCallbackMetadata) => {
-      if (Math.abs(meta.mediaTime - t) <= toleranceSeconds) {
-        clearTimeout(timer);
-        resolve(true);
-      } else {
-        handle = video.requestVideoFrameCallback(onFrame);
-      }
-    };
-    // Registered before seeking so the frame the seek produces isn't missed.
-    handle = video.requestVideoFrameCallback(onFrame);
-  });
-  await seekTo(video, t);
-  return presented;
-}
-
-/**
  * Briefly plays a video muted, then pauses it, to kick it into fetching and
  * decoding. A paused video that has never played can sit at
  * readyState=HAVE_METADATA indefinitely on iOS, never producing a frame.

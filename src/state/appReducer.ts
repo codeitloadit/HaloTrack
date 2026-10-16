@@ -1,11 +1,9 @@
-import { mergeAutoKeyframes } from "../lib/keyframes";
 import { STEP_SECONDS, TRACK_END_EPSILON, type AppState, type HaloConfig, type Phase, type PlaybackState, type Project, type TrackKeyframe } from "./types";
 
 export type AppAction =
   | { type: "LOAD_PROJECT"; project: Project; savedKeyframes: TrackKeyframe[] | null }
   | { type: "SET_PHASE"; phase: Phase }
   | { type: "UPSERT_KEYFRAME"; keyframe: TrackKeyframe }
-  | { type: "MERGE_AUTO_KEYFRAMES"; keyframes: TrackKeyframe[] }
   | { type: "SET_HALO_CONFIG"; halo: HaloConfig }
   | { type: "SET_TRACK_CURSOR"; timestamp: number }
   | { type: "SET_PLAYBACK"; playback: Partial<PlaybackState> }
@@ -35,14 +33,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "LOAD_PROJECT": {
       const keyframes = action.savedKeyframes ?? [];
       const last = keyframes[keyframes.length - 1];
-      // Fully tracked previously: skip straight to the halo. Partly tracked:
-      // resume tracking at the first step after the last one recorded.
+      // Partly tracked previously: tracking resumes at the first step after the
+      // last one recorded.
       const complete = last !== undefined && last.timestamp >= action.project.durationSec - TRACK_END_EPSILON;
       return {
         ...initialState,
         project: action.project,
         keyframes,
-        phase: complete ? "halo" : "track",
+        phase: "halo",
         trackCursor: last && !complete ? Math.min(last.timestamp + STEP_SECONDS, action.project.durationSec) : 0,
       };
     }
@@ -50,8 +48,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, phase: action.phase };
     case "UPSERT_KEYFRAME":
       return { ...state, keyframes: upsertKeyframe(state.keyframes, action.keyframe) };
-    case "MERGE_AUTO_KEYFRAMES":
-      return { ...state, keyframes: mergeAutoKeyframes(state.keyframes, action.keyframes) };
     case "SET_HALO_CONFIG":
       return { ...state, halo: action.halo };
     case "SET_TRACK_CURSOR":
