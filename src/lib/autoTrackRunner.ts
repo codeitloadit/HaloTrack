@@ -1,8 +1,11 @@
 import {
+  associate,
+  centre,
   convergesWith,
   createTracker,
   isGridTime,
   sampleTimes,
+  searchRegion,
   toKeyframe,
   trackPass,
   trackerFromKeyframe,
@@ -10,6 +13,7 @@ import {
   type FrameSize,
   type Rect,
 } from "./autoTrack";
+import { clampIndicator } from "./geometry";
 import { loadPersonDetector, type PersonDetector } from "./personDetector";
 import { createOffscreenVideo, primeVideo, seekToFrame } from "./video";
 import type { Project, TrackKeyframe } from "../state/types";
@@ -58,35 +62,49 @@ export async function openSession(project: Project): Promise<AutoTrackSession> {
     return (await seekToFrame(video, target)) || seekToFrame(video, target);
   }
 
+  // Every caller shares the one video, so detections (and closing) take turns.
+  let queue: Promise<unknown> = Promise.resolve();
+  function inTurn<T>(work: () => Promise<T> | T): Promise<T> {
+    const next = queue.then(work);
+    queue = next.catch(() => {});
+    return next;
+  }
+
+  let closed = false;
+  async function detect(region: Rect, t: number): Promise<Detection[] | null> {
+    if (closed || !(await readFrame(t))) return null;
+    const scale = DETECT_SIZE / region.w;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, DETECT_SIZE, DETECT_SIZE);
+    // Draw only the part of the region inside the frame: browsers disagree on
+    // what drawImage does with a source rectangle that extends past the image.
+    const sx = Math.max(0, region.x);
+    const sy = Math.max(0, region.y);
+    const sw = Math.min(frame.w, region.x + region.w) - sx;
+    const sh = Math.min(frame.h, region.y + region.h) - sy;
+    if (sw <= 0 || sh <= 0) return [];
+    ctx.drawImage(video, sx, sy, sw, sh, (sx - region.x) * scale, (sy - region.y) * scale, sw * scale, sh * scale);
+    return det.detect(canvas).map((b) => ({
+      x: region.x + b.x / scale,
+      y: region.y + b.y / scale,
+      w: b.w / scale,
+      h: b.h / scale,
+      score: b.score,
+    }));
+  }
+
   return {
     frame,
     wholeFrame: { x: (frame.w - full) / 2, y: (frame.h - full) / 2, w: full, h: full },
-    async detect(region, t) {
-      if (!(await readFrame(t))) return null;
-      const scale = DETECT_SIZE / region.w;
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, DETECT_SIZE, DETECT_SIZE);
-      // Draw only the part of the region inside the frame: browsers disagree on
-      // what drawImage does with a source rectangle that extends past the image.
-      const sx = Math.max(0, region.x);
-      const sy = Math.max(0, region.y);
-      const sw = Math.min(frame.w, region.x + region.w) - sx;
-      const sh = Math.min(frame.h, region.y + region.h) - sy;
-      if (sw <= 0 || sh <= 0) return [];
-      ctx.drawImage(video, sx, sy, sw, sh, (sx - region.x) * scale, (sy - region.y) * scale, sw * scale, sh * scale);
-      return det.detect(canvas).map((b) => ({
-        x: region.x + b.x / scale,
-        y: region.y + b.y / scale,
-        w: b.w / scale,
-        h: b.h / scale,
-        score: b.score,
-      }));
-    },
+    detect: (region, t) => inTurn(() => detect(region, t)),
     close() {
-      det.close();
-      video.removeAttribute("src");
-      video.load();
-      video.remove();
+      void inTurn(() => {
+        closed = true;
+        det.close();
+        video.removeAttribute("src");
+        video.load();
+        video.remove();
+      });
     },
   };
 }
@@ -154,4 +172,76 @@ export async function runAutoTrack(
   out.push(...earlier.filter((k) => !trackedBefore.some((t) => Math.abs(t - k.timestamp) < 1e-6)));
 
   return { keyframes: out, from: Math.min(t0, ...out.map((k) => k.timestamp)) };
+}
+
+/** The detections from the last frame a guess looked at, reusable by the next guess. */
+export interface FrameDetections {
+  t: number;
+  detections: Detection[];
+}
+
+export interface StepGuess {
+  keyframe: TrackKeyframe | null;
+  lastFrame: FrameDetections | null;
+}
+
+/**
+ * Guesses where the indicator goes at step `t`, given the user's keyframe for
+ * the step before it (and the one before that, for the player's speed).
+ * Follows the player across the frames in between, then places the indicator
+ * relative to the player's box the same way the user placed it on `prev`, so
+ * the guess keeps their style (how far above the head, below the feet).
+ */
+export async function guessStep(
+  session: AutoTrackSession,
+  prev: TrackKeyframe,
+  beforePrev: TrackKeyframe | undefined,
+  t: number,
+  duration: number,
+  prevFrame: FrameDetections | null,
+  signal: AbortSignal,
+): Promise<StepGuess> {
+  const { frame } = session;
+  const tracker = trackerFromKeyframe(prev, frame);
+  let style: { head: number; feet: number; x: number } | null = null;
+
+  if (!prev.offscreen) {
+    const atPrev =
+      prevFrame && Math.abs(prevFrame.t - prev.timestamp) < 1e-6
+        ? prevFrame.detections
+        : await session.detect(searchRegion(tracker, 0), prev.timestamp);
+    const obs = atPrev ? associate(tracker, atPrev, 0) : null;
+    if (obs?.kind === "match") {
+      const box = obs.rect;
+      style = {
+        head: (prev.headY * frame.h - box.y) / box.h,
+        feet: (prev.feetY * frame.h - (box.y + box.h)) / box.h,
+        x: (prev.centerX * frame.w - centre(box).x) / box.h,
+      };
+      tracker.rect = box;
+    }
+    if (beforePrev && !beforePrev.offscreen) {
+      const dt = prev.timestamp - beforePrev.timestamp;
+      tracker.vx = ((prev.centerX - beforePrev.centerX) * frame.w) / dt;
+      tracker.vy = (((prev.headY + prev.feetY) / 2 - (beforePrev.headY + beforePrev.feetY) / 2) * frame.h) / dt;
+    }
+  }
+
+  let lastFrame: FrameDetections | null = null;
+  const detect = async (region: Rect, at: number) => {
+    const detections = await session.detect(region, at);
+    lastFrame = detections ? { t: at, detections } : null;
+    return detections;
+  };
+  const out = await trackPass(tracker, sampleTimes(prev.timestamp, t), duration, new Map(), detect, () => {}, signal);
+  const guess = out[out.length - 1];
+  if (!guess || guess.offscreen || !style) return { keyframe: guess ?? null, lastFrame };
+
+  const r = tracker.rect;
+  const placed = clampIndicator({
+    headY: (r.y + style.head * r.h) / frame.h,
+    feetY: (r.y + r.h + style.feet * r.h) / frame.h,
+    centerX: (centre(r).x + style.x * r.h) / frame.w,
+  });
+  return { keyframe: { ...guess, ...placed }, lastFrame };
 }

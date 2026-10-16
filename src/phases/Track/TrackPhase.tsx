@@ -9,6 +9,8 @@ import { IconAutoTrack, IconCheck, IconChevronLeft, IconChevronRight, IconClose,
 import type { ContentBox } from "../../lib/geometry";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
 import { useAutoTrack, type AutoTrackStatus } from "./useAutoTrack";
+import { useDetectorSession } from "./useDetectorSession";
+import { useStepGuess } from "./useStepGuess";
 import { useTrackController } from "./useTrackController";
 
 /** How long the clear button stays armed waiting for its confirming second tap. */
@@ -47,15 +49,10 @@ export default function TrackPhase() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const boxRef = useRef<ContentBox | null>(null);
   const controller = useTrackController(videoRef);
-  const auto = useAutoTrack(controller);
+  const acquireSession = useDetectorSession(state.project);
+  const auto = useAutoTrack(controller, acquireSession);
+  const guess = useStepGuess(controller, acquireSession, !auto.busy);
   const [clearArmed, setClearArmed] = useState(false);
-
-  // A video arriving with no tracking yet (rather than one resumed or revisited)
-  // goes straight to picking the player.
-  useEffect(() => {
-    if (state.keyframes.length === 0) void auto.start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (!clearArmed) return;
@@ -154,7 +151,7 @@ export default function TrackPhase() {
             type="button"
             className="icon-btn icon-btn-primary icon-btn-lg"
             onClick={controller.commitNow}
-            disabled={auto.busy}
+            disabled={auto.busy || guess.guessing}
             aria-label="confirm"
           >
             <IconCheck />
@@ -173,12 +170,20 @@ export default function TrackPhase() {
         ) : (
           <button
             type="button"
-            className="icon-btn"
-            onClick={controller.stepNext}
-            disabled={auto.busy || !controller.canStepNext}
-            aria-label="next frame"
+            className={`icon-btn step-accept-btn${guess.guessing ? " guessing" : ""}`}
+            onClick={() => {
+              if (!guess.guessing) controller.commitNow();
+            }}
+            disabled={auto.busy}
+            aria-disabled={guess.guessing}
+            aria-label="accept and next frame"
           >
             <IconChevronRight />
+            {guess.guessing && (
+              <svg className="auto-track-ring auto-track-spin" viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r={RING_RADIUS} strokeDasharray={`${RING_LENGTH * 0.25} ${RING_LENGTH}`} />
+              </svg>
+            )}
           </button>
         )}
         <button

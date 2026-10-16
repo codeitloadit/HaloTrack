@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { pickTarget, type Rect } from "../../lib/autoTrack";
-import { openSession, runAutoTrack, type AutoTrackSeed, type AutoTrackSession } from "../../lib/autoTrackRunner";
+import { runAutoTrack, type AutoTrackSeed, type AutoTrackSession } from "../../lib/autoTrackRunner";
 import { mergeAutoKeyframes } from "../../lib/keyframes";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
 import { STEP_SECONDS, type TrackKeyframe } from "../../state/types";
@@ -29,7 +29,7 @@ const OFFSCREEN_CENTER_X = 0.05;
 interface Chain {
   abort: AbortController;
   session: AutoTrackSession | null;
-  /** Whether a detection or run is in flight; the session mustn't be closed under it. */
+  /** Whether a detection or run is in flight, so further taps wait for it. */
   busy: boolean;
 }
 
@@ -54,7 +54,10 @@ function nextLowAfter(keyframes: TrackKeyframe[], t: number): TrackKeyframe | un
  * pick becomes a hand-set keyframe. Cancelling (or the app going to the
  * background) keeps whatever earlier runs already produced.
  */
-export function useAutoTrack(controller: ReturnType<typeof useTrackController>) {
+export function useAutoTrack(
+  controller: ReturnType<typeof useTrackController>,
+  acquireSession: () => Promise<AutoTrackSession>,
+) {
   const { project, keyframes } = useAppState();
   const dispatch = useAppDispatch();
   const [status, setStatus] = useState<AutoTrackStatus>({ phase: "idle" });
@@ -64,8 +67,8 @@ export function useAutoTrack(controller: ReturnType<typeof useTrackController>) 
   const keyframesRef = useRef(keyframes);
   const controllerRef = useRef(controller);
 
+  // The session itself is shared and outlives the chain.
   function closeChain(chain: Chain) {
-    chain.session?.close();
     chain.session = null;
   }
 
@@ -119,7 +122,7 @@ export function useAutoTrack(controller: ReturnType<typeof useTrackController>) 
     setStatus({ phase: "loading" });
     try {
       await inFlight(chain, async () => {
-        chain.session = await openSession(project);
+        chain.session = await acquireSession();
       });
       if (chain.abort.signal.aborted) return;
       await showPicking(chain, controllerRef.current.cursor, false);
