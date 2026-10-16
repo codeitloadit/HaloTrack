@@ -144,7 +144,10 @@ export default function HaloPhase() {
         />
       </div>
 
-      <PhaseNav onNext={() => dispatch({ type: "SET_PHASE", phase: "track" })} />
+      <PhaseNav
+        onBack={() => dispatch({ type: "SET_PHASE", phase: "track" })}
+        onNext={() => dispatch({ type: "SET_PHASE", phase: "preview" })}
+      />
     </div>
   );
 }

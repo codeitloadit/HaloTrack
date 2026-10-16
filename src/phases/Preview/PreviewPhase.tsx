@@ -114,7 +114,7 @@ export default function PreviewPhase() {
         </button>
       </div>
 
-      <PhaseNav onBack={() => dispatch({ type: "SET_PHASE", phase: "track" })} onNext={() => dispatch({ type: "SET_PHASE", phase: "export" })} />
+      <PhaseNav onBack={() => dispatch({ type: "SET_PHASE", phase: "halo" })} onNext={() => dispatch({ type: "SET_PHASE", phase: "export" })} />
     </div>
   );
 }

@@ -33,14 +33,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "LOAD_PROJECT": {
       const keyframes = action.savedKeyframes ?? [];
       const last = keyframes[keyframes.length - 1];
-      // Partly tracked previously: tracking resumes at the first step after the
-      // last one recorded.
+      // Fully tracked previously: skip straight to the halo. Partly tracked:
+      // resume tracking at the first step after the last one recorded.
       const complete = last !== undefined && last.timestamp >= action.project.durationSec - TRACK_END_EPSILON;
       return {
         ...initialState,
         project: action.project,
         keyframes,
-        phase: "halo",
+        phase: complete ? "halo" : "track",
         trackCursor: last && !complete ? Math.min(last.timestamp + STEP_SECONDS, action.project.durationSec) : 0,
       };
     }

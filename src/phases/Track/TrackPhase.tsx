@@ -107,8 +107,7 @@ export default function TrackPhase() {
       </div>
 
       <PhaseNav
-        onBack={() => dispatch({ type: "SET_PHASE", phase: "halo" })}
-        onNext={() => dispatch({ type: "SET_PHASE", phase: "preview" })}
+        onNext={() => dispatch({ type: "SET_PHASE", phase: "halo" })}
         nextDisabled={state.keyframes.length === 0}
       />
     </div>
