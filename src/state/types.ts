@@ -16,6 +16,8 @@ export interface TrackKeyframe {
   feetY: number;
   centerX: number;
   offscreen: boolean;
+  /** Set when filled in by auto-tracking; absent for keyframes set by hand. */
+  auto?: "ok" | "low";
 }
 
 export interface HaloConfig {

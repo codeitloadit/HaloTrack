@@ -123,3 +123,22 @@ export function IconOpacity({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconAutoTrack({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4 20L14 10" />
+      <path d="M17 3l.9 2.1L20 6l-2.1.9L17 9l-.9-2.1L14 6l2.1-.9z" />
+      <path d="M8 4l.5 1.5L10 6l-1.5.5L8 8l-.5-1.5L6 6l1.5-.5z" />
+      <path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5z" />
+    </svg>
+  );
+}
+
+export function IconClose({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}

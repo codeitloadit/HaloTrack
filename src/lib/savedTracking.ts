@@ -39,6 +39,7 @@ function isKeyframe(value: unknown): value is TrackKeyframe {
     typeof k.headY === "number" &&
     typeof k.feetY === "number" &&
     typeof k.centerX === "number" &&
-    typeof k.offscreen === "boolean"
+    typeof k.offscreen === "boolean" &&
+    (k.auto === undefined || k.auto === "ok" || k.auto === "low")
   );
 }

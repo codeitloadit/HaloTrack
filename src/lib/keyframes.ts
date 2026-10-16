@@ -64,3 +64,19 @@ export function findNearestKeyframe(keyframes: TrackKeyframe[], t: number): Trac
   }
   return nearest;
 }
+
+const SAME_TIME_EPSILON = 1e-6;
+
+/**
+ * Merges auto-tracked keyframes into existing ones: fills empty steps and
+ * replaces earlier auto keyframes, but never overwrites a keyframe set by hand.
+ */
+export function mergeAutoKeyframes(existing: TrackKeyframe[], incoming: TrackKeyframe[]): TrackKeyframe[] {
+  const result = [...existing];
+  for (const k of incoming) {
+    const i = result.findIndex((e) => Math.abs(e.timestamp - k.timestamp) < SAME_TIME_EPSILON);
+    if (i === -1) result.push(k);
+    else if (result[i].auto) result[i] = k;
+  }
+  return result.sort((a, b) => a.timestamp - b.timestamp);
+}

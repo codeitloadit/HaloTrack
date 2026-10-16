@@ -3,11 +3,40 @@ import GestureSurface from "../../components/GestureSurface";
 import IndicatorOverlay from "../../components/IndicatorOverlay";
 import KeyframeStrip from "../../components/KeyframeStrip";
 import PhaseNav from "../../components/PhaseNav";
+import PickOverlay from "../../components/PickOverlay";
 import VideoStage from "../../components/VideoStage";
-import { IconCheck, IconChevronLeft, IconChevronRight } from "../../components/icons";
+import { IconAutoTrack, IconCheck, IconChevronLeft, IconChevronRight, IconClose } from "../../components/icons";
 import type { ContentBox } from "../../lib/geometry";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
+import { useAutoTrack, type AutoTrackStatus } from "./useAutoTrack";
 import { useTrackController } from "./useTrackController";
+
+const RING_RADIUS = 21;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
+function AutoTrackButton({ status, onStart, onCancel }: { status: AutoTrackStatus; onStart: () => void; onCancel: () => void }) {
+  const active = status.phase === "loading" || status.phase === "picking" || status.phase === "running";
+  return (
+    <button
+      type="button"
+      className={`icon-btn auto-track-btn${status.phase === "error" ? " auto-track-error" : ""}`}
+      onClick={active ? onCancel : onStart}
+      aria-label={active ? "cancel auto-track" : "auto-track"}
+    >
+      {active ? <IconClose /> : <IconAutoTrack />}
+      {status.phase === "loading" && (
+        <svg className="auto-track-ring auto-track-spin" viewBox="0 0 48 48">
+          <circle cx="24" cy="24" r={RING_RADIUS} strokeDasharray={`${RING_LENGTH * 0.25} ${RING_LENGTH}`} />
+        </svg>
+      )}
+      {status.phase === "running" && (
+        <svg className="auto-track-ring" viewBox="0 0 48 48">
+          <circle cx="24" cy="24" r={RING_RADIUS} strokeDasharray={`${RING_LENGTH * status.progress} ${RING_LENGTH}`} />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 export default function TrackPhase() {
   const state = useAppState();
@@ -15,6 +44,7 @@ export default function TrackPhase() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const boxRef = useRef<ContentBox | null>(null);
   const controller = useTrackController(videoRef);
+  const auto = useAutoTrack(controller);
 
   if (!state.project) return null;
 
@@ -23,6 +53,19 @@ export default function TrackPhase() {
       <VideoStage src={state.project.objectUrl} initialTime={controller.cursor} ref={videoRef}>
         {(box) => {
           boxRef.current = box;
+          if (auto.status.phase === "picking") {
+            return (
+              <PickOverlay
+                boxes={auto.status.boxes}
+                frame={{ w: state.project!.width, h: state.project!.height }}
+                width={box.width}
+                height={box.height}
+                flash={auto.status.flash}
+                onPick={auto.pick}
+              />
+            );
+          }
+          if (auto.busy) return null;
           return (
             <GestureSurface
               className="gesture-fill"
@@ -45,26 +88,39 @@ export default function TrackPhase() {
         }}
       </VideoStage>
 
-      <KeyframeStrip keyframes={state.keyframes} current={controller.cursor} onSelect={controller.jumpTo} />
+      <KeyframeStrip
+        keyframes={state.keyframes}
+        current={controller.cursor}
+        onSelect={(t) => {
+          if (!auto.busy) controller.jumpTo(t);
+        }}
+      />
 
       <div className="track-controls">
+        <AutoTrackButton status={auto.status} onStart={auto.start} onCancel={auto.cancel} />
         <button
           type="button"
           className="icon-btn"
           onClick={controller.stepPrev}
-          disabled={!controller.canStepPrev}
+          disabled={auto.busy || !controller.canStepPrev}
           aria-label="previous frame"
         >
           <IconChevronLeft />
         </button>
-        <button type="button" className="icon-btn icon-btn-primary icon-btn-lg" onClick={controller.commitNow} aria-label="confirm">
+        <button
+          type="button"
+          className="icon-btn icon-btn-primary icon-btn-lg"
+          onClick={controller.commitNow}
+          disabled={auto.busy}
+          aria-label="confirm"
+        >
           <IconCheck />
         </button>
         <button
           type="button"
           className="icon-btn"
           onClick={controller.stepNext}
-          disabled={!controller.canStepNext}
+          disabled={auto.busy || !controller.canStepNext}
           aria-label="next frame"
         >
           <IconChevronRight />
@@ -73,7 +129,7 @@ export default function TrackPhase() {
 
       <PhaseNav
         onNext={() => dispatch({ type: "SET_PHASE", phase: "halo" })}
-        nextDisabled={state.keyframes.length === 0}
+        nextDisabled={auto.busy || state.keyframes.length === 0}
       />
     </div>
   );

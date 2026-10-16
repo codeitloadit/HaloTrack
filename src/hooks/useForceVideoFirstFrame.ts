@@ -1,8 +1,7 @@
 import { useEffect, useState, type RefObject } from "react";
-import { seekTo } from "../lib/video";
+import { primeVideo, seekTo } from "../lib/video";
 
 const STALL_TIMEOUT_MS = 4000;
-const KICKSTART_TIMEOUT_MS = 400;
 
 const MEDIA_ERROR_MESSAGES: Record<number, string> = {
   1: "MEDIA_ERR_ABORTED",
@@ -10,39 +9,6 @@ const MEDIA_ERROR_MESSAGES: Record<number, string> = {
   3: "MEDIA_ERR_DECODE (unsupported codec/container)",
   4: "MEDIA_ERR_SRC_NOT_SUPPORTED (format not supported)",
 };
-
-function kickstartBuffering(video: HTMLVideoElement): Promise<void> {
-  return new Promise((resolve) => {
-    const wasMuted = video.muted;
-    video.muted = true;
-    video
-      .play()
-      .then(() => {
-        // Pausing the instant play() resolves can race ahead of the first frame
-        // actually being decoded and painted (observed with MediaRecorder's own
-        // fragmented-mp4 output, which some players can only play forward through
-        // rather than seek around in) — so wait for real playback progress via
-        // 'timeupdate' first, with a timeout fallback so this can't hang forever.
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          video.removeEventListener("timeupdate", onTimeUpdate);
-          clearTimeout(fallback);
-          video.pause();
-          video.muted = wasMuted;
-          resolve();
-        };
-        const onTimeUpdate = () => finish();
-        const fallback = setTimeout(finish, KICKSTART_TIMEOUT_MS);
-        video.addEventListener("timeupdate", onTimeUpdate);
-      })
-      .catch(() => {
-        video.muted = wasMuted;
-        resolve();
-      });
-  });
-}
 
 /**
  * Forces a <video> to actually decode and paint its first frame, and surfaces a
@@ -93,7 +59,7 @@ export function useForceVideoFirstFrame(
         video!.currentTime = initialTime;
       }
 
-      await kickstartBuffering(video!);
+      await primeVideo(video!);
       if (cancelled) return;
 
       if (video!.readyState < video!.HAVE_CURRENT_DATA) {

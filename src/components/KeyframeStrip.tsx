@@ -18,7 +18,7 @@ export default function KeyframeStrip({ keyframes, current, reference, onSelect 
           <button
             key={k.timestamp}
             type="button"
-            className={`keyframe-dot${isCurrent ? " current" : ""}${isReference ? " reference" : ""}${k.offscreen ? " offscreen" : ""}`}
+            className={`keyframe-dot${k.auto ? ` auto auto-${k.auto}` : ""}${isCurrent ? " current" : ""}${isReference ? " reference" : ""}${k.offscreen ? " offscreen" : ""}`}
             onClick={() => onSelect(k.timestamp)}
             aria-label={`keyframe ${k.timestamp.toFixed(2)}`}
           />

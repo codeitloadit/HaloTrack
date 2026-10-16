@@ -16,6 +16,9 @@ const buildNumber = process.env.GITHUB_RUN_NUMBER
 // https://vite.dev/config/
 export default defineConfig({
   base: '/HaloTrack/',
+  // Pre-bundle the lazily imported detector at dev-server start; discovering it on
+  // first use made the dev server reload mid-request.
+  optimizeDeps: { include: ['@mediapipe/tasks-vision'] },
   define: {
     __APP_VERSION__: JSON.stringify(`${buildNumber ? `Build ${buildNumber}` : 'dev'} · ${commitHash()}`),
   },
@@ -42,7 +45,9 @@ export default defineConfig({
       workbox: {
         // Everything the app needs is fetched once on install; after that it
         // should keep working fully offline.
-        globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,wasm,tflite}'],
+        // The auto-tracking runtime and model are well over the 2 MiB default.
+        maximumFileSizeToCacheInBytes: 24 * 1024 * 1024,
       },
     }),
   ],
