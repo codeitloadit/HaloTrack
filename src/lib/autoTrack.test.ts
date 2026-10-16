@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   createTracker,
-  gridTimes,
   pickTarget,
   sampleTimes,
   trackPass,
@@ -9,6 +8,7 @@ import {
   type FrameSize,
   type Rect,
 } from "./autoTrack";
+import { gridTimes } from "./keyframes";
 import type { TrackKeyframe } from "../state/types";
 
 const frame: FrameSize = { w: 720, h: 1280 };

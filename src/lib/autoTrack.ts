@@ -69,14 +69,6 @@ export function iou(a: Rect, b: Rect): number {
   return union > 0 ? inter / union : 0;
 }
 
-/** The tracking steps, matching those the Track phase creates by hand. */
-export function gridTimes(duration: number): number[] {
-  const times: number[] = [];
-  for (let i = 0; i * STEP_SECONDS < duration - TRACK_END_EPSILON; i++) times.push(i * STEP_SECONDS);
-  times.push(duration);
-  return times;
-}
-
 /** Sample times from `from` towards `to` (either direction), including both ends. */
 export function sampleTimes(from: number, to: number): number[] {
   const dir = to >= from ? 1 : -1;

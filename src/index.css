@@ -184,6 +184,7 @@ input[type="range"] {
 /* --- Keyframe strip --- */
 
 .keyframe-strip {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -208,6 +209,19 @@ input[type="range"] {
   background: rgba(255, 255, 255, 0.28);
   padding: 0;
   transition: transform 0.1s ease;
+}
+
+.keyframe-dot.empty {
+  background: rgba(255, 255, 255, 0.14);
+  transform: scale(0.55);
+}
+
+.keyframe-strip-cap {
+  width: 2px;
+  min-width: 2px;
+  height: 14px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .keyframe-dot:active {

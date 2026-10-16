@@ -50,6 +50,13 @@ export default function TrackPhase() {
   const auto = useAutoTrack(controller);
   const [clearArmed, setClearArmed] = useState(false);
 
+  // A video arriving with no tracking yet (rather than one resumed or revisited)
+  // goes straight to picking the player.
+  useEffect(() => {
+    if (state.keyframes.length === 0) void auto.start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!clearArmed) return;
     const timer = setTimeout(() => setClearArmed(false), CLEAR_ARM_MS);
@@ -108,6 +115,7 @@ export default function TrackPhase() {
       <KeyframeStrip
         keyframes={state.keyframes}
         current={controller.cursor}
+        duration={controller.duration}
         onSelect={(t) => {
           if (!auto.busy) controller.jumpTo(t);
         }}

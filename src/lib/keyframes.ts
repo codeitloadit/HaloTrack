@@ -1,4 +1,4 @@
-import type { TrackKeyframe } from "../state/types";
+import { STEP_SECONDS, TRACK_END_EPSILON, type TrackKeyframe } from "../state/types";
 
 export interface Bracket {
   k0: TrackKeyframe;
@@ -79,4 +79,12 @@ export function mergeAutoKeyframes(existing: TrackKeyframe[], incoming: TrackKey
     else if (result[i].auto) result[i] = k;
   }
   return result.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/** The tracking steps, matching those the Track phase creates by hand. */
+export function gridTimes(duration: number): number[] {
+  const times: number[] = [];
+  for (let i = 0; i * STEP_SECONDS < duration - TRACK_END_EPSILON; i++) times.push(i * STEP_SECONDS);
+  times.push(duration);
+  return times;
 }
