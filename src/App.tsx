@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { saveTracking } from "./lib/savedTracking";
+import { clearTracking, saveTracking } from "./lib/savedTracking";
 import { useAppState } from "./state/AppStateContext";
 import ImportPhase from "./phases/Import/ImportPhase";
 import TrackPhase from "./phases/Track/TrackPhase";
@@ -12,7 +12,9 @@ export default function App() {
   const { project, keyframes } = state;
 
   useEffect(() => {
-    if (project && keyframes.length > 0) saveTracking(project.key, keyframes);
+    if (!project) return;
+    if (keyframes.length > 0) saveTracking(project.key, keyframes);
+    else clearTracking(project.key);
   }, [project, keyframes]);
 
   switch (state.phase) {

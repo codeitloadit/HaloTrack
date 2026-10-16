@@ -31,6 +31,14 @@ export function saveTracking(key: string, keyframes: TrackKeyframe[]): void {
   }
 }
 
+export function clearTracking(key: string): void {
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + key);
+  } catch {
+    // Storage unavailable; nothing to clear.
+  }
+}
+
 function isKeyframe(value: unknown): value is TrackKeyframe {
   if (typeof value !== "object" || value === null) return false;
   const k = value as Record<string, unknown>;

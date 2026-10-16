@@ -1,15 +1,18 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import GestureSurface from "../../components/GestureSurface";
 import IndicatorOverlay from "../../components/IndicatorOverlay";
 import KeyframeStrip from "../../components/KeyframeStrip";
 import PhaseNav from "../../components/PhaseNav";
 import PickOverlay from "../../components/PickOverlay";
 import VideoStage from "../../components/VideoStage";
-import { IconAutoTrack, IconCheck, IconChevronLeft, IconChevronRight, IconClose } from "../../components/icons";
+import { IconAutoTrack, IconCheck, IconChevronLeft, IconChevronRight, IconClose, IconTrash } from "../../components/icons";
 import type { ContentBox } from "../../lib/geometry";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
 import { useAutoTrack, type AutoTrackStatus } from "./useAutoTrack";
 import { useTrackController } from "./useTrackController";
+
+/** How long the clear button stays armed waiting for its confirming second tap. */
+const CLEAR_ARM_MS = 3000;
 
 const RING_RADIUS = 21;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
@@ -45,6 +48,20 @@ export default function TrackPhase() {
   const boxRef = useRef<ContentBox | null>(null);
   const controller = useTrackController(videoRef);
   const auto = useAutoTrack(controller);
+  const [clearArmed, setClearArmed] = useState(false);
+
+  useEffect(() => {
+    if (!clearArmed) return;
+    const timer = setTimeout(() => setClearArmed(false), CLEAR_ARM_MS);
+    return () => clearTimeout(timer);
+  }, [clearArmed]);
+
+  function clearAll() {
+    if (!clearArmed) return setClearArmed(true);
+    setClearArmed(false);
+    dispatch({ type: "CLEAR_KEYFRAMES" });
+    controller.jumpTo(0, []);
+  }
 
   if (!state.project) return null;
 
@@ -124,6 +141,15 @@ export default function TrackPhase() {
           aria-label="next frame"
         >
           <IconChevronRight />
+        </button>
+        <button
+          type="button"
+          className={`icon-btn track-clear-btn${clearArmed ? " track-clear-armed" : ""}`}
+          onClick={clearAll}
+          disabled={auto.busy || state.keyframes.length === 0}
+          aria-label={clearArmed ? "confirm clear all" : "clear all"}
+        >
+          <IconTrash />
         </button>
       </div>
 

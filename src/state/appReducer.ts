@@ -9,6 +9,7 @@ export type AppAction =
   | { type: "SET_HALO_CONFIG"; halo: HaloConfig }
   | { type: "SET_TRACK_CURSOR"; timestamp: number }
   | { type: "SET_PLAYBACK"; playback: Partial<PlaybackState> }
+  | { type: "CLEAR_KEYFRAMES" }
   | { type: "RESET" };
 
 export const initialState: AppState = {
@@ -57,6 +58,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, trackCursor: action.timestamp };
     case "SET_PLAYBACK":
       return { ...state, playback: { ...state.playback, ...action.playback } };
+    case "CLEAR_KEYFRAMES":
+      return { ...state, keyframes: [], trackCursor: 0 };
     case "RESET":
       return initialState;
     default:
