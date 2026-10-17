@@ -85,6 +85,21 @@ export default function HaloPhase() {
 
   return (
     <div className="phase-container">
+      <div className="halo-controls halo-controls-top">
+        <ColorPickerButton
+          color={halo.color}
+          opacity={halo.opacity}
+          onColorChange={(color) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, color } })}
+          secondColor={halo.secondColor}
+          onSecondColorChange={(secondColor) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, secondColor } })}
+          onOpacityChange={(opacity) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, opacity } })}
+          style={halo.style}
+          rotationSpeed={halo.rotationSpeed}
+          onStyleChange={(style) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, style } })}
+          onRotationSpeedChange={(rotationSpeed) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, rotationSpeed } })}
+        />
+      </div>
+
       <VideoStage src={state.project.objectUrl} initialTime={halo.referenceTimestamp} ref={videoRef}>
         {(box) => {
           const derived = deriveHaloParams(halo.referenceTimestamp, state.keyframes, halo, {
@@ -111,21 +126,6 @@ export default function HaloPhase() {
         reference={halo.referenceTimestamp}
         onSelect={selectReference}
       />
-
-      <div className="halo-controls">
-        <ColorPickerButton
-          color={halo.color}
-          opacity={halo.opacity}
-          onColorChange={(color) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, color } })}
-          secondColor={halo.secondColor}
-          onSecondColorChange={(secondColor) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, secondColor } })}
-          onOpacityChange={(opacity) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, opacity } })}
-          style={halo.style}
-          rotationSpeed={halo.rotationSpeed}
-          onStyleChange={(style) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, style } })}
-          onRotationSpeedChange={(rotationSpeed) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, rotationSpeed } })}
-        />
-      </div>
 
       <PhaseNav
         onBack={() => dispatch({ type: "SET_PHASE", phase: "track" })}

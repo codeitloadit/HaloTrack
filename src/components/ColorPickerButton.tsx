@@ -100,7 +100,7 @@ export default function ColorPickerButton({
           )}
           {style !== "solid" && (
             <div className="slider-row">
-              <IconRotateCcw size={16} />
+              <IconRotateCcw size={20} />
               <input
                 type="range"
                 className="row-slider"
@@ -114,11 +114,11 @@ export default function ColorPickerButton({
                 }}
                 aria-label="rotation speed"
               />
-              <IconRotateCw size={16} />
+              <IconRotateCw size={20} />
             </div>
           )}
           <div className="slider-row">
-            <IconOpacity size={16} />
+            <IconOpacity size={20} />
             <input
               type="range"
               className="row-slider"
