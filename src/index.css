@@ -349,6 +349,15 @@ input[type="range"] {
   opacity: 0.5;
 }
 
+.comet-color-select .eyedropper-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f2f3f5;
+}
+
 .comet-color-select button.active {
   border-color: rgba(255, 255, 255, 0.85);
   opacity: 1;
@@ -460,4 +469,33 @@ input[type="range"] {
   width: calc(var(--p, 0) * 100%);
   background: var(--accent);
   transition: width 0.1s linear;
+}
+
+.color-sampler {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.color-sampler-target {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.color-sampler-loupe {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
 }

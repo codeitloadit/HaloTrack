@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import type { HaloStyle } from "../state/types";
-import { IconOpacity, IconRotateCcw, IconRotateCw } from "./icons";
+import { IconEyedropper, IconOpacity, IconRotateCcw, IconRotateCw } from "./icons";
 
 const RAINBOW_CSS =
   "conic-gradient(hsl(0,100%,55%), hsl(60,100%,55%), hsl(120,100%,55%), hsl(180,100%,55%), hsl(240,100%,55%), hsl(300,100%,55%), hsl(360,100%,55%))";
@@ -35,6 +35,11 @@ interface ColorPickerButtonProps {
   onOpacityChange: (opacity: number) => void;
   onStyleChange: (style: HaloStyle) => void;
   onRotationSpeedChange: (speed: number) => void;
+  /** Starts picking a colour from the video; the picked colour goes to `apply`. */
+  onEyedropper: (apply: (color: string) => void) => void;
+  /** Picking from the video: the panel steps aside, and tapping the swatch cancels. */
+  sampling: boolean;
+  onCancelSampling: () => void;
 }
 
 export default function ColorPickerButton({
@@ -48,6 +53,9 @@ export default function ColorPickerButton({
   onOpacityChange,
   onStyleChange,
   onRotationSpeedChange,
+  onEyedropper,
+  sampling,
+  onCancelSampling,
 }: ColorPickerButtonProps) {
   const [open, setOpen] = useState(false);
   const [editingSecond, setEditingSecond] = useState(false);
@@ -61,10 +69,10 @@ export default function ColorPickerButton({
         type="button"
         className="color-swatch"
         style={{ background: swatchBackground(style, color, secondColor), opacity: 0.3 + opacity * 0.7 }}
-        onClick={() => setOpen((v) => !v)}
-        aria-label="halo style"
+        onClick={() => (sampling ? onCancelSampling() : setOpen((v) => !v))}
+        aria-label={sampling ? "cancel picking from video" : "halo style"}
       />
-      {open && (
+      {open && !sampling && (
         <div className="color-picker-popover">
           <div className="halo-mode-toggle">
             {STYLES.map((s) => (
@@ -78,18 +86,27 @@ export default function ColorPickerButton({
               />
             ))}
           </div>
-          {twoColors && (
+          {style !== "rainbow" && (
             <div className="comet-color-select">
-              {[color, secondColor].map((c, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className={(i === 1) === editingSecond ? "active" : ""}
-                  style={{ background: c }}
-                  onClick={() => setEditingSecond(i === 1)}
-                  aria-label={colorLabels[i]}
-                />
-              ))}
+              {twoColors &&
+                [color, secondColor].map((c, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={(i === 1) === editingSecond ? "active" : ""}
+                    style={{ background: c }}
+                    onClick={() => setEditingSecond(i === 1)}
+                    aria-label={colorLabels[i]}
+                  />
+                ))}
+              <button
+                type="button"
+                className="eyedropper-btn"
+                onClick={() => onEyedropper(pickingSecond ? onSecondColorChange : onColorChange)}
+                aria-label="pick color from video"
+              >
+                <IconEyedropper />
+              </button>
             </div>
           )}
           {style !== "rainbow" && (

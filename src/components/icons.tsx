@@ -123,3 +123,13 @@ export function IconOpacity({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconEyedropper({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M14.5 4.5l5 5" />
+      <path d="M17 2.5a2.1 2.1 0 0 1 3 3l-2.5 2.5-3-3z" />
+      <path d="M15.5 7.5L6 17l-1 3 3-1 9.5-9.5" />
+    </svg>
+  );
+}

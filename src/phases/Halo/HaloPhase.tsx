@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import ColorPickerButton from "../../components/ColorPickerButton";
+import ColorSampler from "../../components/ColorSampler";
 import GestureSurface from "../../components/GestureSurface";
 import HaloOverlay from "../../components/HaloOverlay";
 import KeyframeStrip from "../../components/KeyframeStrip";
@@ -20,6 +21,8 @@ export default function HaloPhase() {
   const state = useAppState();
   const dispatch = useAppDispatch();
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Where a colour picked from the video goes, while picking one.
+  const [sampleInto, setSampleInto] = useState<((color: string) => void) | null>(null);
 
   useEffect(() => {
     if (!state.halo && state.keyframes.length > 0) {
@@ -97,6 +100,9 @@ export default function HaloPhase() {
           rotationSpeed={halo.rotationSpeed}
           onStyleChange={(style) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, style } })}
           onRotationSpeedChange={(rotationSpeed) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, rotationSpeed } })}
+          onEyedropper={(apply) => setSampleInto(() => apply)}
+          sampling={sampleInto !== null}
+          onCancelSampling={() => setSampleInto(null)}
         />
       </div>
 
@@ -106,6 +112,22 @@ export default function HaloPhase() {
             width: box.width,
             height: box.height,
           });
+          if (sampleInto) {
+            return (
+              <>
+                <HaloOverlay width={box.width} height={box.height} params={derived} rotationSpeed={halo.rotationSpeed} />
+                <ColorSampler
+                  videoRef={videoRef}
+                  width={box.width}
+                  height={box.height}
+                  onPick={(hex) => {
+                    sampleInto(hex);
+                    setSampleInto(null);
+                  }}
+                />
+              </>
+            );
+          }
           return (
             <GestureSurface
               className="gesture-fill"
