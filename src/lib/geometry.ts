@@ -1,5 +1,3 @@
-import { MIN_INDICATOR_HEIGHT } from "../state/types";
-
 export interface Point {
   x: number;
   y: number;
@@ -45,25 +43,6 @@ export function pinchDelta(curr: PinchFrame, prev: PinchFrame): PinchDelta {
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-export interface IndicatorState {
-  headY: number;
-  feetY: number;
-  centerX: number;
-}
-
-/** Keeps an indicator within a generous margin of the frame and at least MIN_INDICATOR_HEIGHT tall. */
-export function clampIndicator(next: IndicatorState): IndicatorState {
-  let headY = clamp(next.headY, -0.5, 1.5);
-  let feetY = clamp(next.feetY, -0.5, 1.5);
-  const centerX = clamp(next.centerX, -0.5, 1.5);
-  if (feetY - headY < MIN_INDICATOR_HEIGHT) {
-    const mid = (headY + feetY) / 2;
-    headY = mid - MIN_INDICATOR_HEIGHT / 2;
-    feetY = mid + MIN_INDICATOR_HEIGHT / 2;
-  }
-  return { headY, feetY, centerX };
 }
 
 export interface ContentBox {

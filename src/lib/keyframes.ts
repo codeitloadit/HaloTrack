@@ -1,4 +1,4 @@
-import { STEP_SECONDS, TRACK_END_EPSILON, type TrackKeyframe } from "../state/types";
+import type { TrackKeyframe } from "../state/types";
 
 export interface Bracket {
   k0: TrackKeyframe;
@@ -63,12 +63,4 @@ export function findNearestKeyframe(keyframes: TrackKeyframe[], t: number): Trac
     }
   }
   return nearest;
-}
-
-/** The tracking steps, matching those the Track phase creates by hand. */
-export function gridTimes(duration: number): number[] {
-  const times: number[] = [];
-  for (let i = 0; i * STEP_SECONDS < duration - TRACK_END_EPSILON; i++) times.push(i * STEP_SECONDS);
-  times.push(duration);
-  return times;
 }

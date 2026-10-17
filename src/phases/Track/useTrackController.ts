@@ -1,11 +1,17 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
-import { clamp, clampIndicator, type IndicatorState } from "../../lib/geometry";
+import { clamp } from "../../lib/geometry";
 import { seekTo } from "../../lib/video";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
-import { STEP_SECONDS, TRACK_END_EPSILON, type TrackKeyframe } from "../../state/types";
+import { MIN_INDICATOR_HEIGHT, STEP_SECONDS, TRACK_END_EPSILON, type TrackKeyframe } from "../../state/types";
 
 const COMMIT_DEBOUNCE_MS = 400;
+
+export interface IndicatorState {
+  headY: number;
+  feetY: number;
+  centerX: number;
+}
 
 function defaultIndicator(): IndicatorState {
   return { headY: 0.2, feetY: 0.8, centerX: 0.5 };
@@ -30,20 +36,32 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [complete, setComplete] = useState(false);
 
-  function seekAndLoad(timestamp: number, source: TrackKeyframe[]) {
+  function seekAndLoad(timestamp: number) {
     if (videoRef.current) void seekTo(videoRef.current, timestamp);
-    const existing = source.find((k) => Math.abs(k.timestamp - timestamp) < 1e-6);
+    const existing = keyframes.find((k) => Math.abs(k.timestamp - timestamp) < 1e-6);
     if (existing) {
       setIndicator({ headY: existing.headY, feetY: existing.feetY, centerX: existing.centerX });
       return;
     }
-    const prior = [...source].reverse().find((k) => k.timestamp < timestamp);
+    const prior = [...keyframes].reverse().find((k) => k.timestamp < timestamp);
     setIndicator(prior ? { headY: prior.headY, feetY: prior.feetY, centerX: prior.centerX } : defaultIndicator());
   }
 
   // No mount-time seek here: VideoStage seeks to this same `trackCursor` itself via
   // its `initialTime` prop, as part of its own first-frame-decode sequence — seeking
   // again here concurrently would race with that.
+
+  function clampIndicator(next: IndicatorState): IndicatorState {
+    let headY = clamp(next.headY, -0.5, 1.5);
+    let feetY = clamp(next.feetY, -0.5, 1.5);
+    const centerX = clamp(next.centerX, -0.5, 1.5);
+    if (feetY - headY < MIN_INDICATOR_HEIGHT) {
+      const mid = (headY + feetY) / 2;
+      headY = mid - MIN_INDICATOR_HEIGHT / 2;
+      feetY = mid + MIN_INDICATOR_HEIGHT / 2;
+    }
+    return { headY, feetY, centerX };
+  }
 
   function applyPinch(deltaDy: number, deltaMidX: number, deltaMidY: number, boxWidth: number, boxHeight: number) {
     setIndicator((prev) => {
@@ -113,14 +131,10 @@ export function useTrackController(videoRef: RefObject<HTMLVideoElement | null>)
     );
   }
 
-  /**
-   * `source` lets a caller pass keyframes it has just dispatched, which this
-   * render's `keyframes` doesn't include yet.
-   */
-  function jumpTo(timestamp: number, source: TrackKeyframe[] = keyframes) {
+  function jumpTo(timestamp: number) {
     resetDebounce();
     dispatch({ type: "SET_TRACK_CURSOR", timestamp });
-    seekAndLoad(timestamp, source);
+    seekAndLoad(timestamp);
     setComplete(false);
   }
 

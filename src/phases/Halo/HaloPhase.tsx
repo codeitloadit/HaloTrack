@@ -2,19 +2,14 @@ import { useEffect, useRef } from "react";
 import ColorPickerButton from "../../components/ColorPickerButton";
 import GestureSurface from "../../components/GestureSurface";
 import HaloOverlay from "../../components/HaloOverlay";
-import IndicatorOverlay from "../../components/IndicatorOverlay";
 import KeyframeStrip from "../../components/KeyframeStrip";
 import PhaseNav from "../../components/PhaseNav";
 import VideoStage from "../../components/VideoStage";
 import { clamp } from "../../lib/geometry";
 import { deriveHaloParams } from "../../lib/halo";
-import { interpolateIndicator } from "../../lib/keyframes";
 import { seekTo } from "../../lib/video";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
-import { DEFAULT_HALO_OFFSET_Y, DEFAULT_HALO_OPACITY, type TrackKeyframe } from "../../state/types";
-
-/** Who the ring is shown around before anything is tracked. */
-const STAND_IN: TrackKeyframe = { timestamp: 0, headY: 0.2, feetY: 0.8, centerX: 0.5, offscreen: false };
+import { DEFAULT_HALO_OFFSET_Y, DEFAULT_HALO_OPACITY } from "../../state/types";
 
 function defaultReferenceTimestamp(keyframes: { timestamp: number; offscreen: boolean }[]): number {
   const firstOnscreen = keyframes.find((k) => !k.offscreen);
@@ -27,13 +22,13 @@ export default function HaloPhase() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (!state.halo) {
+    if (!state.halo && state.keyframes.length > 0) {
       dispatch({
         type: "SET_HALO_CONFIG",
         halo: {
           referenceTimestamp: defaultReferenceTimestamp(state.keyframes),
-          horizontalRadius: 0.35,
-          verticalRadius: 0.08,
+          horizontalRadius: 0.17,
+          verticalRadius: 0.022,
           offsetX: 0,
           offsetY: DEFAULT_HALO_OFFSET_Y,
           color: "#ff3b30",
@@ -62,10 +57,6 @@ export default function HaloPhase() {
 
   if (!state.project || !state.halo) return null;
   const halo = state.halo;
-  const tracked = state.keyframes.length > 0;
-  const shownOn = tracked ? state.keyframes : [STAND_IN];
-  const reference = interpolateIndicator(shownOn, halo.referenceTimestamp);
-  const playerHeight = (boxHeight: number) => Math.max(1, (reference.feetY - reference.headY) * boxHeight);
 
   function selectReference(timestamp: number) {
     dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, referenceTimestamp: timestamp } });
@@ -76,20 +67,19 @@ export default function HaloPhase() {
     deltaDy: number,
     deltaMidX: number,
     deltaMidY: number,
+    boxWidth: number,
     boxHeight: number,
   ) {
-    const unit = playerHeight(boxHeight);
-    const horizontalRadius = clamp(halo.horizontalRadius + deltaDx / 2 / unit, 0.02, 3);
-    const verticalRadius = clamp(halo.verticalRadius + deltaDy / 2 / unit, 0.01, 1.5);
-    const offsetX = clamp(halo.offsetX + deltaMidX / unit, -1.5, 1.5);
-    const offsetY = clamp(halo.offsetY + deltaMidY / unit, -1.5, 1.5);
+    const horizontalRadius = clamp(halo.horizontalRadius + deltaDx / 2 / boxWidth, 0.01, 1);
+    const verticalRadius = clamp(halo.verticalRadius + deltaDy / 2 / boxHeight, 0.01, 1);
+    const offsetX = clamp(halo.offsetX + deltaMidX / boxWidth, -0.5, 0.5);
+    const offsetY = clamp(halo.offsetY + deltaMidY / boxHeight, -0.5, 0.5);
     dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, horizontalRadius, verticalRadius, offsetX, offsetY } });
   }
 
-  function adjustPosition(dx: number, dy: number, boxHeight: number) {
-    const unit = playerHeight(boxHeight);
-    const offsetX = clamp(halo.offsetX + dx / unit, -1.5, 1.5);
-    const offsetY = clamp(halo.offsetY + dy / unit, -1.5, 1.5);
+  function adjustPosition(dx: number, dy: number, boxWidth: number, boxHeight: number) {
+    const offsetX = clamp(halo.offsetX + dx / boxWidth, -0.5, 0.5);
+    const offsetY = clamp(halo.offsetY + dy / boxHeight, -0.5, 0.5);
     dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, offsetX, offsetY } });
   }
 
@@ -97,7 +87,7 @@ export default function HaloPhase() {
     <div className="phase-container">
       <VideoStage src={state.project.objectUrl} initialTime={halo.referenceTimestamp} ref={videoRef}>
         {(box) => {
-          const derived = deriveHaloParams(halo.referenceTimestamp, shownOn, halo, {
+          const derived = deriveHaloParams(halo.referenceTimestamp, state.keyframes, halo, {
             width: box.width,
             height: box.height,
           });
@@ -105,29 +95,22 @@ export default function HaloPhase() {
             <GestureSurface
               className="gesture-fill"
               onPinch={(delta) =>
-                adjustRadiiAndPosition(delta.deltaDx, delta.deltaDy, delta.deltaMidX, delta.deltaMidY, box.height)
+                adjustRadiiAndPosition(delta.deltaDx, delta.deltaDy, delta.deltaMidX, delta.deltaMidY, box.width, box.height)
               }
-              onPan={(dx, dy) => adjustPosition(dx, dy, box.height)}
+              onPan={(dx, dy) => adjustPosition(dx, dy, box.width, box.height)}
             >
-              {!tracked && (
-                <div className="halo-stand-in">
-                  <IndicatorOverlay {...STAND_IN} width={box.width} height={box.height} />
-                </div>
-              )}
               <HaloOverlay width={box.width} height={box.height} params={derived} rotationSpeed={halo.rotationSpeed} />
             </GestureSurface>
           );
         }}
       </VideoStage>
 
-      {tracked && (
-        <KeyframeStrip
-          keyframes={state.keyframes}
-          current={halo.referenceTimestamp}
-          reference={halo.referenceTimestamp}
-          onSelect={selectReference}
-        />
-      )}
+      <KeyframeStrip
+        keyframes={state.keyframes}
+        current={halo.referenceTimestamp}
+        reference={halo.referenceTimestamp}
+        onSelect={selectReference}
+      />
 
       <div className="halo-controls">
         <ColorPickerButton

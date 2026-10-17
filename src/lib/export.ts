@@ -1,5 +1,4 @@
 import { deriveHaloParams, drawHalo } from "./halo";
-import { createOffscreenVideo } from "./video";
 import type { HaloConfig, Project, TrackKeyframe } from "../state/types";
 
 export interface CanvasSize {
@@ -79,11 +78,28 @@ export async function exportVideo(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not acquire 2d canvas context");
 
+  const videoEl = document.createElement("video");
+  videoEl.src = project.objectUrl;
+  videoEl.playsInline = true;
   // Deliberately not muted: some browsers only feed decoded audio into a
   // MediaElementSource when the element itself is unmuted. Staying silent during
   // export instead relies on never connecting the audio graph to the speakers
   // (see below) rather than on the `muted` property.
-  const videoEl = createOffscreenVideo(project.objectUrl, project.width, project.height, false);
+  // Kept attached (off-screen) rather than fully detached — some mobile browsers
+  // throttle decoding of media elements that aren't in the document. Rendered at
+  // real size rather than shrunk to 1x1px: a visually tiny/zero-size video element
+  // has been observed (on long clips, on iOS) to have its *video* decode
+  // deprioritized under memory/power pressure independently of audio — showing up
+  // as the picture freezing partway through export while the audio keeps playing.
+  // Positioning it far off-screen (rather than shrinking it) avoids that signal
+  // while still keeping it invisible to the user.
+  videoEl.style.position = "fixed";
+  videoEl.style.left = "-100000px";
+  videoEl.style.top = "0";
+  videoEl.style.width = `${project.width}px`;
+  videoEl.style.height = `${project.height}px`;
+  videoEl.style.pointerEvents = "none";
+  document.body.appendChild(videoEl);
 
   // iOS requires the AudioContext to be created/resumed synchronously within the
   // user gesture's call stack (this function is invoked directly from the Export

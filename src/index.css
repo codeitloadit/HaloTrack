@@ -184,7 +184,6 @@ input[type="range"] {
 /* --- Keyframe strip --- */
 
 .keyframe-strip {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -209,19 +208,6 @@ input[type="range"] {
   background: rgba(255, 255, 255, 0.28);
   padding: 0;
   transition: transform 0.1s ease;
-}
-
-.keyframe-dot.empty {
-  background: rgba(255, 255, 255, 0.14);
-  transform: scale(0.55);
-}
-
-.keyframe-strip-cap {
-  width: 2px;
-  min-width: 2px;
-  height: 14px;
-  border-radius: 1px;
-  background: rgba(255, 255, 255, 0.45);
 }
 
 .keyframe-dot:active {
@@ -255,28 +241,6 @@ input[type="range"] {
   background: var(--surface);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-}
-
-.track-controls {
-  position: relative;
-}
-
-.halo-stand-in {
-  position: absolute;
-  inset: 0;
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-.track-clear-btn {
-  position: absolute;
-  right: 14px;
-}
-
-.track-clear-armed,
-.track-clear-armed:active {
-  background: rgba(255, 90, 90, 0.85);
-  color: #fff;
 }
 
 .phase-nav {
