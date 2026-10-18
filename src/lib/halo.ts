@@ -24,6 +24,12 @@ export interface HaloDrawParams {
   topGap: boolean;
   /** Fill the inside of the ring with a fainter version of it. */
   filled: boolean;
+  /**
+   * Taper the ring much more strongly, thin at the far (top) side and thick at
+   * the near (bottom) side, so it reads as lying flat on the ground. Used with
+   * ground-only mode, where the ring is seen sitting on the ground.
+   */
+  depth: boolean;
 }
 
 /** Where to read the ground from for `halo`, or null when the ring isn't limited to it. */
@@ -115,8 +121,8 @@ function getScratch(
 export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams, ground: GroundSource | null = null): void {
   if (p.opacity <= 0.001 || p.radiusX <= 0 || p.radiusY <= 0) return;
   const baseWidth = Math.max(4, p.radiusY * 0.35);
-  const topWidth = baseWidth * 0.7;
-  const bottomWidth = baseWidth * 0.8;
+  const topWidth = baseWidth * (p.depth ? 0.45 : 0.7);
+  const bottomWidth = baseWidth * (p.depth ? 1.25 : 0.8);
 
   // Render the layer at the destination's device resolution so it stays sharp
   // on high-DPI canvases.
@@ -508,6 +514,7 @@ export function deriveHaloParams(
   const scale = scaleFactorAt(keyframes, t, referenceHeight);
   const { feetY, centerX } = interpolateIndicator(keyframes, t);
   const opacity = haloOpacityAt(keyframes, t, halo.opacity);
+  const onGround = halo.groundOnly && halo.groundColors.length > 0;
 
   return {
     centerX: (centerX + halo.offsetX * scale) * canvasSize.width,
@@ -522,7 +529,8 @@ export function deriveHaloParams(
     // gets the same rotation in preview and export.
     rotation: 2 * Math.PI * halo.rotationSpeed * t,
     clockwise: halo.rotationSpeed >= 0,
-    topGap: !(halo.groundOnly && halo.groundColors.length > 0),
+    topGap: !onGround,
     filled: halo.filled,
+    depth: onGround,
   };
 }
