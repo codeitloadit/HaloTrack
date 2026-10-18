@@ -22,6 +22,8 @@ export interface HaloDrawParams {
    * hides it behind the legs exactly.
    */
   topGap: boolean;
+  /** Fill the inside of the ring with a fainter version of it. */
+  filled: boolean;
 }
 
 /** Where to read the ground from for `halo`, or null when the ring isn't limited to it. */
@@ -162,32 +164,33 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams, groun
   }
   path.closePath();
 
-  lctx.fillStyle =
-    p.style === "rainbow"
-      ? rainbowGradient(lctx, p.rotation)
-      : p.style === "comet"
-        ? cometGradient(lctx, [p.color, p.secondColor], p.rotation, p.clockwise)
-        : p.style === "gradient"
-          ? twoToneGradient(lctx, [p.color, p.secondColor], p.rotation)
-          : p.color;
+  lctx.fillStyle = ringStyle(lctx, p);
   lctx.fill(path, "evenodd");
-
-  if (p.topGap && typeof lctx.createConicGradient === "function") {
-    const fade = lctx.createConicGradient(0, 0, 0);
-    for (let i = 0; i <= FADE_STOPS; i++) {
-      const t = i / FADE_STOPS;
-      const d = angularDistance(t * Math.PI * 2, TOP_ANGLE);
-      const alpha = 1 - Math.exp(-(d * d) / (2 * TOP_GAP_SIGMA ** 2));
-      fade.addColorStop(t, `rgba(0,0,0,${alpha.toFixed(4)})`);
-    }
-    lctx.globalCompositeOperation = "destination-in";
-    lctx.fillStyle = fade;
-    lctx.fill(path, "evenodd");
-    lctx.globalCompositeOperation = "source-over";
-  }
+  if (p.topGap) fadeTop(lctx, halfW, halfH, squash);
 
   const glowBlur = Math.max(10, p.radiusY * 0.8) * GLOW_SPREAD * res;
   const glow = renderGlow(layer, layerW, layerH, glowBlur, p);
+
+  // Added after the glow is taken from the ring, so only the ring glows, and
+  // drawn behind the ring so the ring stays crisp on top of it.
+  if (p.filled) {
+    const fillScratch = getScratch("fill", layerW, layerH, true);
+    if (fillScratch) {
+      const [fillCanvas, fctx] = fillScratch;
+      fctx.setTransform(res, 0, 0, res * squash, halfW * res, halfH * res);
+      fctx.fillStyle = ringStyle(fctx, p);
+      fctx.beginPath();
+      fctx.arc(0, 0, p.radiusX, 0, Math.PI * 2);
+      fctx.fill();
+      if (p.topGap) fadeTop(fctx, halfW, halfH, squash);
+      lctx.save();
+      lctx.setTransform(1, 0, 0, 1, 0, 0);
+      lctx.globalAlpha = FILL_STRENGTH;
+      lctx.globalCompositeOperation = "destination-over";
+      lctx.drawImage(fillCanvas, 0, 0);
+      lctx.restore();
+    }
+  }
   const padUser = glow ? glow[1] / res : 0;
 
   if (ground) {
@@ -232,6 +235,36 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams, groun
   ctx.filter = "blur(1.5px)";
   ctx.drawImage(layer, 0, 0, layerW, layerH, p.centerX - halfW, p.centerY - halfH, halfW * 2, halfH * 2);
   ctx.restore();
+}
+
+/** How strong the inside of a filled ring is, relative to the ring itself. */
+const FILL_STRENGTH = 0.3;
+
+/** The ring's colouring for its style, built for `ctx` (in the ring's circle space). */
+function ringStyle(ctx: CanvasRenderingContext2D, p: HaloDrawParams): CanvasGradient | string {
+  if (p.style === "rainbow") return rainbowGradient(ctx, p.rotation);
+  if (p.style === "comet") return cometGradient(ctx, [p.color, p.secondColor], p.rotation, p.clockwise);
+  if (p.style === "gradient") return twoToneGradient(ctx, [p.color, p.secondColor], p.rotation);
+  return p.color;
+}
+
+/**
+ * Fades out everything already drawn on `ctx` around the top-middle of the ring
+ * (see TOP_GAP_SIGMA). `ctx` is in the ring's circle space, centred on the ring.
+ */
+function fadeTop(ctx: CanvasRenderingContext2D, halfW: number, halfH: number, squash: number) {
+  if (typeof ctx.createConicGradient !== "function") return;
+  const fade = ctx.createConicGradient(0, 0, 0);
+  for (let i = 0; i <= FADE_STOPS; i++) {
+    const t = i / FADE_STOPS;
+    const d = angularDistance(t * Math.PI * 2, TOP_ANGLE);
+    const alpha = 1 - Math.exp(-(d * d) / (2 * TOP_GAP_SIGMA ** 2));
+    fade.addColorStop(t, `rgba(0,0,0,${alpha.toFixed(4)})`);
+  }
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.fillStyle = fade;
+  ctx.fillRect(-halfW, -halfH / squash, halfW * 2, (halfH / squash) * 2);
+  ctx.globalCompositeOperation = "source-over";
 }
 
 // The glow spreads 1.5x the base size and is layered on twice.
@@ -490,5 +523,6 @@ export function deriveHaloParams(
     rotation: 2 * Math.PI * halo.rotationSpeed * t,
     clockwise: halo.rotationSpeed >= 0,
     topGap: !(halo.groundOnly && halo.groundColors.length > 0),
+    filled: halo.filled,
   };
 }

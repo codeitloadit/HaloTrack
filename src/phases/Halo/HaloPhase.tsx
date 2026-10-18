@@ -40,6 +40,7 @@ export default function HaloPhase() {
           opacity: DEFAULT_HALO_OPACITY,
           style: "solid",
           rotationSpeed: 0,
+          filled: false,
           groundOnly: false,
           groundColors: [],
           groundTolerance: DEFAULT_GROUND_TOLERANCE,
@@ -122,6 +123,8 @@ export default function HaloPhase() {
           onEyedropper={(apply) => setSampleInto(() => apply)}
           sampling={sampleInto !== null}
           onCancelSampling={() => setSampleInto(null)}
+          filled={halo.filled}
+          onFilledChange={(filled) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, filled } })}
           groundOnly={halo.groundOnly}
           groundColors={halo.groundColors}
           groundTolerance={halo.groundTolerance}

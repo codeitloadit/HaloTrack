@@ -152,3 +152,11 @@ export function IconTolerance({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconFilledRing({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <ellipse cx="12" cy="13" rx="9" ry="5" fill="currentColor" fillOpacity={0.35} />
+    </svg>
+  );
+}

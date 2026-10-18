@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import type { HaloStyle } from "../state/types";
-import { IconEyedropper, IconGroundOnly, IconOpacity, IconRotateCcw, IconRotateCw, IconTolerance } from "./icons";
+import { IconEyedropper, IconFilledRing, IconGroundOnly, IconOpacity, IconRotateCcw, IconRotateCw, IconTolerance } from "./icons";
 
 const RAINBOW_CSS =
   "conic-gradient(hsl(0,100%,55%), hsl(60,100%,55%), hsl(120,100%,55%), hsl(180,100%,55%), hsl(240,100%,55%), hsl(300,100%,55%), hsl(360,100%,55%))";
@@ -41,6 +41,8 @@ interface ColorPickerButtonProps {
   /** Picking from the video: the panel steps aside, and tapping the swatch cancels. */
   sampling: boolean;
   onCancelSampling: () => void;
+  filled: boolean;
+  onFilledChange: (filled: boolean) => void;
   groundOnly: boolean;
   groundColors: string[];
   groundTolerance: number;
@@ -63,6 +65,8 @@ export default function ColorPickerButton({
   onEyedropper,
   sampling,
   onCancelSampling,
+  filled,
+  onFilledChange,
   groundOnly,
   groundColors,
   groundTolerance,
@@ -148,6 +152,15 @@ export default function ColorPickerButton({
             </div>
           )}
           <div className="ground-row">
+            <button
+              type="button"
+              className={`ground-toggle${filled ? " active" : ""}`}
+              onClick={() => onFilledChange(!filled)}
+              aria-pressed={filled}
+              aria-label="fill the ring"
+            >
+              <IconFilledRing />
+            </button>
             <button
               type="button"
               className={`ground-toggle${groundOnly ? " active" : ""}`}
