@@ -31,6 +31,11 @@ export interface HaloConfig {
   style: HaloStyle;
   /** Revolutions per second of the rainbow or comet; the sign sets direction. */
   rotationSpeed: number;
+  /** Only draw the ring where the video shows ground, so players and objects in front hide it. */
+  groundOnly: boolean;
+  groundColors: string[];
+  /** See GroundSource.tolerance. */
+  groundTolerance: number;
 }
 
 export type HaloStyle = "solid" | "gradient" | "comet" | "rainbow";

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
-import { drawHalo, type HaloDrawParams } from "../lib/halo";
+import { useEffect, useRef, type RefObject } from "react";
+import { drawHalo, groundSourceFor, type HaloDrawParams } from "../lib/halo";
+import type { HaloConfig } from "../state/types";
 
 interface HaloOverlayProps {
   width: number;
@@ -7,9 +8,12 @@ interface HaloOverlayProps {
   params: HaloDrawParams | null;
   /** Spins a rainbow or comet live, so the speed can be judged on a paused frame. */
   rotationSpeed?: number;
+  /** The video under the overlay and the halo settings, for limiting the ring to the ground. */
+  videoRef?: RefObject<HTMLVideoElement | null>;
+  halo?: HaloConfig;
 }
 
-export default function HaloOverlay({ width, height, params, rotationSpeed = 0 }: HaloOverlayProps) {
+export default function HaloOverlay({ width, height, params, rotationSpeed = 0, videoRef, halo }: HaloOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Accumulated live spin, kept across re-renders so changing the speed (or any
   // other setting) carries on from the current angle instead of jumping back.
@@ -21,17 +25,21 @@ export default function HaloOverlay({ width, height, params, rotationSpeed = 0 }
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const video = videoRef?.current;
+    const ground = video && halo && video.videoWidth ? groundSourceFor(halo, video, video.videoWidth / width) : null;
 
     function draw() {
       ctx!.setTransform(1, 0, 0, 1, 0, 0);
       ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (params) drawHalo(ctx!, { ...params, rotation: params.rotation + spinRef.current });
+      if (params) drawHalo(ctx!, { ...params, rotation: params.rotation + spinRef.current }, ground);
     }
 
     if (!params || params.style === "solid" || rotationSpeed === 0) {
       draw();
-      return;
+      // The mask comes from the video frame, which changes after a seek lands.
+      video?.addEventListener("seeked", draw);
+      return () => video?.removeEventListener("seeked", draw);
     }
 
     let last = performance.now();
@@ -42,7 +50,7 @@ export default function HaloOverlay({ width, height, params, rotationSpeed = 0 }
       frame = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(frame);
-  }, [params, width, height, dpr, rotationSpeed]);
+  }, [params, width, height, dpr, rotationSpeed, videoRef, halo]);
 
   return (
     <canvas

@@ -7,6 +7,7 @@ import KeyframeStrip from "../../components/KeyframeStrip";
 import PhaseNav from "../../components/PhaseNav";
 import VideoStage from "../../components/VideoStage";
 import { clamp } from "../../lib/geometry";
+import { DEFAULT_GROUND_TOLERANCE, suggestGroundColor } from "../../lib/groundMask";
 import { deriveHaloParams } from "../../lib/halo";
 import { seekTo } from "../../lib/video";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
@@ -39,6 +40,9 @@ export default function HaloPhase() {
           opacity: DEFAULT_HALO_OPACITY,
           style: "solid",
           rotationSpeed: 0,
+          groundOnly: false,
+          groundColors: [],
+          groundTolerance: DEFAULT_GROUND_TOLERANCE,
         },
       });
     }
@@ -60,6 +64,21 @@ export default function HaloPhase() {
 
   if (!state.project || !state.halo) return null;
   const halo = state.halo;
+
+  /** Turning it on for the first time starts with a guess at the ground colour around the ring. */
+  function setGroundOnly(groundOnly: boolean) {
+    let { groundColors } = halo;
+    const video = videoRef.current;
+    if (groundOnly && groundColors.length === 0 && video?.videoWidth) {
+      const ring = deriveHaloParams(halo.referenceTimestamp, state.keyframes, halo, {
+        width: video.videoWidth,
+        height: video.videoHeight,
+      });
+      const guess = suggestGroundColor(video, 1, ring.centerX, ring.centerY, ring.radiusX, ring.radiusY);
+      if (guess) groundColors = [guess];
+    }
+    dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, groundOnly, groundColors } });
+  }
 
   function selectReference(timestamp: number) {
     dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, referenceTimestamp: timestamp } });
@@ -103,6 +122,12 @@ export default function HaloPhase() {
           onEyedropper={(apply) => setSampleInto(() => apply)}
           sampling={sampleInto !== null}
           onCancelSampling={() => setSampleInto(null)}
+          groundOnly={halo.groundOnly}
+          groundColors={halo.groundColors}
+          groundTolerance={halo.groundTolerance}
+          onGroundOnlyChange={setGroundOnly}
+          onGroundColorsChange={(groundColors) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, groundColors } })}
+          onGroundToleranceChange={(groundTolerance) => dispatch({ type: "SET_HALO_CONFIG", halo: { ...halo, groundTolerance } })}
         />
       </div>
 
@@ -115,7 +140,14 @@ export default function HaloPhase() {
           if (sampleInto) {
             return (
               <>
-                <HaloOverlay width={box.width} height={box.height} params={derived} rotationSpeed={halo.rotationSpeed} />
+                <HaloOverlay
+                  width={box.width}
+                  height={box.height}
+                  params={derived}
+                  rotationSpeed={halo.rotationSpeed}
+                  videoRef={videoRef}
+                  halo={halo}
+                />
                 <ColorSampler
                   videoRef={videoRef}
                   width={box.width}
@@ -136,7 +168,14 @@ export default function HaloPhase() {
               }
               onPan={(dx, dy) => adjustPosition(dx, dy, box.width, box.height)}
             >
-              <HaloOverlay width={box.width} height={box.height} params={derived} rotationSpeed={halo.rotationSpeed} />
+              <HaloOverlay
+                width={box.width}
+                height={box.height}
+                params={derived}
+                rotationSpeed={halo.rotationSpeed}
+                videoRef={videoRef}
+                halo={halo}
+              />
             </GestureSurface>
           );
         }}

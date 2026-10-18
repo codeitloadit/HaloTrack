@@ -1,3 +1,4 @@
+import { groundMask, type GroundSource } from "./groundMask";
 import { bracket, interpolateIndicator } from "./keyframes";
 import type { HaloConfig, HaloStyle, TrackKeyframe } from "../state/types";
 
@@ -15,6 +16,41 @@ export interface HaloDrawParams {
   rotation: number;
   /** Which way the comet is heading; its tail trails the other way. */
   clockwise: boolean;
+  /**
+   * Fade out the top-middle of the ring, where the player's legs usually pass
+   * in front of it. Not needed when the ring is limited to the ground, which
+   * hides it behind the legs exactly.
+   */
+  topGap: boolean;
+}
+
+/** Where to read the ground from for `halo`, or null when the ring isn't limited to it. */
+export function groundSourceFor(halo: HaloConfig, video: HTMLVideoElement, scale: number): GroundSource | null {
+  if (!halo.groundOnly || halo.groundColors.length === 0) return null;
+  return { video, scale, colors: halo.groundColors, tolerance: halo.groundTolerance };
+}
+
+/**
+ * Keeps only what the mask covers of the top-left `dw`×`dh` of `target`, which
+ * lines up with the mask's sub-rectangle `sx,sy,sw,sh`. Clears the rest of it.
+ */
+function applyMask(
+  target: CanvasRenderingContext2D,
+  mask: HTMLCanvasElement,
+  [sx, sy, sw, sh]: [number, number, number, number],
+  dw = target.canvas.width,
+  dh = target.canvas.height,
+) {
+  target.save();
+  target.setTransform(1, 0, 0, 1, 0, 0);
+  target.shadowColor = "transparent";
+  target.shadowBlur = 0;
+  target.shadowOffsetX = 0;
+  target.globalAlpha = 1;
+  target.imageSmoothingEnabled = true;
+  target.globalCompositeOperation = "destination-in";
+  target.drawImage(mask, sx, sy, sw, sh, 0, 0, dw, dh);
+  target.restore();
 }
 
 const RING_POINTS = 360;
@@ -74,7 +110,7 @@ function getScratch(
  * and any future colour gradient or rotation — sweep around the ring's
  * perspective angle rather than being stretched by the flattened ellipse.
  */
-export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void {
+export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams, ground: GroundSource | null = null): void {
   if (p.opacity <= 0.001 || p.radiusX <= 0 || p.radiusY <= 0) return;
   const baseWidth = Math.max(4, p.radiusY * 0.35);
   const topWidth = baseWidth * 0.7;
@@ -136,7 +172,7 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
           : p.color;
   lctx.fill(path, "evenodd");
 
-  if (typeof lctx.createConicGradient === "function") {
+  if (p.topGap && typeof lctx.createConicGradient === "function") {
     const fade = lctx.createConicGradient(0, 0, 0);
     for (let i = 0; i <= FADE_STOPS; i++) {
       const t = i / FADE_STOPS;
@@ -151,28 +187,44 @@ export function drawHalo(ctx: CanvasRenderingContext2D, p: HaloDrawParams): void
   }
 
   const glowBlur = Math.max(10, p.radiusY * 0.8) * GLOW_SPREAD * res;
-  {
-    const glow = renderGlow(layer, layerW, layerH, glowBlur, p);
-    if (glow) {
-      const [glowCanvas, pad] = glow;
-      const padUser = pad / res;
-      ctx.save();
-      ctx.globalAlpha = p.opacity;
-      for (let i = 0; i < GLOW_PASSES; i++) {
-        ctx.drawImage(
-          glowCanvas,
-          0,
-          0,
-          layerW + pad * 2,
-          layerH + pad * 2,
-          p.centerX - halfW - padUser,
-          p.centerY - halfH - padUser,
-          (halfW + padUser) * 2,
-          (halfH + padUser) * 2,
-        );
+  const glow = renderGlow(layer, layerW, layerH, glowBlur, p);
+  const padUser = glow ? glow[1] / res : 0;
+
+  if (ground) {
+    // One mask over the whole glow's area, cut to the ring's part of it for the ring.
+    const area = { x: p.centerX - halfW - padUser, y: p.centerY - halfH - padUser, w: (halfW + padUser) * 2, h: (halfH + padUser) * 2 };
+    const mask = groundMask(ground, area);
+    if (mask) {
+      const fx = mask.width / area.w;
+      const fy = mask.height / area.h;
+      applyMask(lctx, mask, [padUser * fx, padUser * fy, halfW * 2 * fx, halfH * 2 * fy]);
+      if (glow) {
+        const [glowCanvas, pad] = glow;
+        const glowCtx = glowCanvas.getContext("2d");
+        // The glow is only in the left part of its canvas (see renderGlow).
+        if (glowCtx) applyMask(glowCtx, mask, [0, 0, mask.width, mask.height], layerW + pad * 2, layerH + pad * 2);
       }
-      ctx.restore();
     }
+  }
+
+  if (glow) {
+    const [glowCanvas, pad] = glow;
+    ctx.save();
+    ctx.globalAlpha = p.opacity;
+    for (let i = 0; i < GLOW_PASSES; i++) {
+      ctx.drawImage(
+        glowCanvas,
+        0,
+        0,
+        layerW + pad * 2,
+        layerH + pad * 2,
+        p.centerX - halfW - padUser,
+        p.centerY - halfH - padUser,
+        (halfW + padUser) * 2,
+        (halfH + padUser) * 2,
+      );
+    }
+    ctx.restore();
   }
 
   ctx.save();
@@ -437,5 +489,6 @@ export function deriveHaloParams(
     // gets the same rotation in preview and export.
     rotation: 2 * Math.PI * halo.rotationSpeed * t,
     clockwise: halo.rotationSpeed >= 0,
+    topGap: !(halo.groundOnly && halo.groundColors.length > 0),
   };
 }

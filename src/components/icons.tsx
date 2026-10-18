@@ -133,3 +133,22 @@ export function IconEyedropper({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconGroundOnly({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M9.5 20.8C5.2 20.4 2 18.9 2 17s3.2-3.4 7.5-3.8" />
+      <path d="M14.5 13.2c4.3.4 7.5 1.9 7.5 3.8s-3.2 3.4-7.5 3.8" />
+      <path d="M12 3v19" strokeWidth={3} />
+    </svg>
+  );
+}
+
+export function IconTolerance({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <circle cx="12" cy="12" r="3" fill="currentColor" />
+      <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
+    </svg>
+  );
+}

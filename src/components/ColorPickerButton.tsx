@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import type { HaloStyle } from "../state/types";
-import { IconEyedropper, IconOpacity, IconRotateCcw, IconRotateCw } from "./icons";
+import { IconEyedropper, IconGroundOnly, IconOpacity, IconRotateCcw, IconRotateCw, IconTolerance } from "./icons";
 
 const RAINBOW_CSS =
   "conic-gradient(hsl(0,100%,55%), hsl(60,100%,55%), hsl(120,100%,55%), hsl(180,100%,55%), hsl(240,100%,55%), hsl(300,100%,55%), hsl(360,100%,55%))";
+const MAX_GROUND_COLORS = 6;
 // Speeds this close to zero snap to "off", so the slider's centre is easy to hit.
 const ROTATION_SNAP = 0.05;
 
@@ -40,6 +41,12 @@ interface ColorPickerButtonProps {
   /** Picking from the video: the panel steps aside, and tapping the swatch cancels. */
   sampling: boolean;
   onCancelSampling: () => void;
+  groundOnly: boolean;
+  groundColors: string[];
+  groundTolerance: number;
+  onGroundOnlyChange: (on: boolean) => void;
+  onGroundColorsChange: (colors: string[]) => void;
+  onGroundToleranceChange: (tolerance: number) => void;
 }
 
 export default function ColorPickerButton({
@@ -56,6 +63,12 @@ export default function ColorPickerButton({
   onEyedropper,
   sampling,
   onCancelSampling,
+  groundOnly,
+  groundColors,
+  groundTolerance,
+  onGroundOnlyChange,
+  onGroundColorsChange,
+  onGroundToleranceChange,
 }: ColorPickerButtonProps) {
   const [open, setOpen] = useState(false);
   const [editingSecond, setEditingSecond] = useState(false);
@@ -132,6 +145,53 @@ export default function ColorPickerButton({
                 aria-label="rotation speed"
               />
               <IconRotateCw size={20} />
+            </div>
+          )}
+          <div className="ground-row">
+            <button
+              type="button"
+              className={`ground-toggle${groundOnly ? " active" : ""}`}
+              onClick={() => onGroundOnlyChange(!groundOnly)}
+              aria-pressed={groundOnly}
+              aria-label="only draw on the ground"
+            >
+              <IconGroundOnly />
+            </button>
+            {groundOnly &&
+              groundColors.map((c, i) => (
+                <button
+                  key={`${c}-${i}`}
+                  type="button"
+                  className="ground-chip"
+                  style={{ background: c }}
+                  onClick={() => onGroundColorsChange(groundColors.filter((_, j) => j !== i))}
+                  aria-label={`remove ground color ${c}`}
+                />
+              ))}
+            {groundOnly && groundColors.length < MAX_GROUND_COLORS && (
+              <button
+                type="button"
+                className="ground-add"
+                onClick={() => onEyedropper((c) => onGroundColorsChange([...groundColors, c]))}
+                aria-label="add ground color from video"
+              >
+                <IconEyedropper />
+              </button>
+            )}
+          </div>
+          {groundOnly && (
+            <div className="slider-row">
+              <IconTolerance size={20} />
+              <input
+                type="range"
+                className="row-slider"
+                min={10}
+                max={120}
+                step={1}
+                value={groundTolerance}
+                onChange={(e) => onGroundToleranceChange(Number(e.target.value))}
+                aria-label="ground color tolerance"
+              />
             </div>
           )}
           <div className="slider-row">

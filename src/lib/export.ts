@@ -1,4 +1,4 @@
-import { deriveHaloParams, drawHalo } from "./halo";
+import { deriveHaloParams, drawHalo, groundSourceFor } from "./halo";
 import type { HaloConfig, Project, TrackKeyframe } from "../state/types";
 
 export interface CanvasSize {
@@ -17,7 +17,8 @@ export function renderFrame(
   ctx.drawImage(videoEl, 0, 0, canvasSize.width, canvasSize.height);
   if (!halo || keyframes.length === 0) return;
   const derived = deriveHaloParams(t, keyframes, halo, canvasSize);
-  drawHalo(ctx, derived);
+  const scale = videoEl.videoWidth ? videoEl.videoWidth / canvasSize.width : 1;
+  drawHalo(ctx, derived, groundSourceFor(halo, videoEl, scale));
 }
 
 // mp4 first: it's the only container Photos (and most non-browser consumers) can
