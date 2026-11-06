@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import TagSheet from "../../components/TagSheet";
-import { IconImport, IconRecord } from "../../components/icons";
+import { IconCamera, IconImport, IconRecord } from "../../components/icons";
 import { formatDuration, probeVideo, thumbnailFromBlob, type VideoInfo } from "../../lib/clipMedia";
 import { allTags, deleteClip, listClips, newClipId, saveClip, updateClipTags } from "../../lib/clipStore";
 import { clipTrackingKey, loadTracking } from "../../lib/savedTracking";
@@ -40,6 +40,7 @@ function describeError(prefix: string, err: unknown): string {
 export default function LibraryPhase() {
   const dispatch = useAppDispatch();
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [clips, setClips] = useState<ClipMeta[] | null>(null);
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
   const [openClipId, setOpenClipId] = useState<string | null>(null);
@@ -158,12 +159,13 @@ export default function LibraryPhase() {
     );
   }
 
-  return (
-    <div className="library-phase">
+  function videoInput(ref: RefObject<HTMLInputElement | null>, capture?: "environment") {
+    return (
       <input
-        ref={inputRef}
+        ref={ref}
         type="file"
         accept="video/*"
+        capture={capture}
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -171,6 +173,14 @@ export default function LibraryPhase() {
           if (file) void handleImportFile(file);
         }}
       />
+    );
+  }
+
+  return (
+    <div className="library-phase">
+      {videoInput(inputRef)}
+      {/* Opens the system camera, which may stabilize where in-app getUserMedia capture can't. */}
+      {videoInput(cameraInputRef, "environment")}
 
       {message && (
         <div className="video-diagnostic" onClick={() => setMessage(null)}>
@@ -190,7 +200,7 @@ export default function LibraryPhase() {
         {clips !== null && loadedClips.length === 0 ? (
           <div className="library-empty">
             <div>No clips yet.</div>
-            <div>Record a clip or import one from Photos.</div>
+            <div>Record a clip, or import one from Photos.</div>
           </div>
         ) : (
           <div className="library-grid">
@@ -203,6 +213,7 @@ export default function LibraryPhase() {
             ))}
           </div>
         )}
+        <div className="library-version">{__APP_VERSION__}</div>
       </div>
 
       <div className="library-bar">
@@ -225,7 +236,16 @@ export default function LibraryPhase() {
         >
           <IconRecord size={30} />
         </button>
-        <div className="library-version">{__APP_VERSION__}</div>
+        <button
+          type="button"
+          className="library-import-btn library-camera-btn"
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={busy}
+          aria-label="record with the system camera"
+        >
+          <span>Camera</span>
+          <IconCamera size={22} />
+        </button>
       </div>
 
       {openClip && (

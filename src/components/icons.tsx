@@ -200,3 +200,12 @@ export function IconClose({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconCamera({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <rect x="2.5" y="6.5" width="13" height="11" rx="2" />
+      <path d="M15.5 10.5l6-3.5v10l-6-3.5" />
+    </svg>
+  );
+}
