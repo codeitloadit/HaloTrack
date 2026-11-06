@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import PhaseNav from "../../components/PhaseNav";
 import { IconDownload } from "../../components/icons";
-import { exportVideo, hasSupportedExportFormat } from "../../lib/export";
+import { exportVideo } from "../../lib/export";
+import { hasSupportedExportFormat } from "../../lib/realtimeRender";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
 
 export default function ExportPhase() {

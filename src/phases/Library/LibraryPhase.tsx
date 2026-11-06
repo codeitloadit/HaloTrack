@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import TagSheet from "../../components/TagSheet";
 import { IconImport, IconRecord } from "../../components/icons";
-import { formatDuration, probeVideo, thumbnailFromBlob, type VideoInfo } from "../../lib/clipMedia";
+import { formatDuration, probeVideo, thumbnailFromBlob, thumbnailFromImageUrl, type VideoInfo } from "../../lib/clipMedia";
 import { allTags, deleteClip, listClips, newClipId, saveClip, updateClipTags } from "../../lib/clipStore";
 import { clipTrackingKey, loadTracking } from "../../lib/savedTracking";
+import type { StabilizeResult } from "../../lib/stabilize/stabilize";
 import { useAppDispatch } from "../../state/AppStateContext";
 import type { ClipMeta } from "../../state/types";
 import ClipDetail from "./ClipDetail";
@@ -134,6 +135,24 @@ export default function LibraryPhase() {
     }
   }
 
+  /** Saves the stabilized copy alongside the original (same tags, sorted right next to it) and opens it. */
+  async function handleStabilized(original: ClipMeta, { blob, posterDataUrl }: StabilizeResult) {
+    const info = await probeVideo(blob, original.durationSec);
+    const thumbnail = posterDataUrl ? await thumbnailFromImageUrl(posterDataUrl) : original.thumbnail;
+    const clip: ClipMeta = {
+      id: newClipId(),
+      createdAt: original.createdAt + 1,
+      ...info,
+      mimeType: blob.type || original.mimeType,
+      tags: original.tags,
+      thumbnail,
+      stabilizedFrom: original.id,
+    };
+    await saveClip(clip, blob);
+    setClips((prev) => [...(prev ?? []), clip].sort((a, b) => b.createdAt - a.createdAt));
+    setOpenClipId(clip.id);
+  }
+
   async function handleTagsChange(clip: ClipMeta, clipTags: string[]) {
     try {
       const updated = await updateClipTags(clip, clipTags);
@@ -199,6 +218,7 @@ export default function LibraryPhase() {
                 <BlobImage blob={clip.thumbnail} />
                 <span className="library-tile-duration">{formatDuration(clip.durationSec)}</span>
                 {clip.tags.length > 0 && <span className="library-tile-tags">{clip.tags.join(" · ")}</span>}
+                {clip.stabilizedFrom && <span className="library-tile-badge">Stabilized</span>}
               </button>
             ))}
           </div>
@@ -230,12 +250,14 @@ export default function LibraryPhase() {
 
       {openClip && (
         <ClipDetail
+          key={openClip.id}
           clip={openClip}
           knownTags={tags}
           onClose={() => setOpenClipId(null)}
           onTrack={(file) => handleTrack(openClip, file)}
           onDelete={() => handleDelete(openClip)}
           onTagsChange={(clipTags) => handleTagsChange(openClip, clipTags)}
+          onStabilized={(result) => handleStabilized(openClip, result)}
         />
       )}
 

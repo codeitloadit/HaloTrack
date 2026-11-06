@@ -10,6 +10,8 @@ export interface ClipMeta {
   mimeType: string;
   tags: string[];
   thumbnail: Blob;
+  /** Set on a stabilized copy: the id of the clip it was made from. */
+  stabilizedFrom?: string;
 }
 
 export interface Project {

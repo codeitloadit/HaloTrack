@@ -103,6 +103,13 @@ export function captureThumbnail(video: HTMLVideoElement): Promise<Blob> {
   return drawThumbnail(video, video.videoWidth, video.videoHeight);
 }
 
+export async function thumbnailFromImageUrl(url: string): Promise<Blob> {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  return drawThumbnail(img, img.naturalWidth, img.naturalHeight);
+}
+
 /** Resolves once the element has a decoded frame to draw, nudging playback if it won't produce one. */
 async function ensureFrame(video: HTMLVideoElement): Promise<void> {
   if (video.readyState >= video.HAVE_CURRENT_DATA) return;

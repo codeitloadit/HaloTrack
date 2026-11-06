@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { captureThumbnail } from "../../lib/clipMedia";
-import { pickSupportedMime } from "../../lib/export";
+import { pickSupportedMime } from "../../lib/realtimeRender";
 
 export type FacingMode = "environment" | "user";
 

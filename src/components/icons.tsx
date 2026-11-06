@@ -200,3 +200,12 @@ export function IconClose({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconStabilize({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
