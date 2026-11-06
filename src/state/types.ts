@@ -1,4 +1,16 @@
-export type Phase = "import" | "track" | "halo" | "preview" | "export";
+export type Phase = "library" | "record" | "track" | "halo" | "preview" | "export";
+
+/** A saved clip's metadata; the video bytes are stored separately so listing stays cheap. */
+export interface ClipMeta {
+  id: string;
+  createdAt: number;
+  durationSec: number;
+  width: number;
+  height: number;
+  mimeType: string;
+  tags: string[];
+  thumbnail: Blob;
+}
 
 export interface Project {
   /** Stable identity used to remember this video's tracking across imports. */

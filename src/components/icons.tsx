@@ -160,3 +160,43 @@ export function IconFilledRing({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconFlipCamera({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+      <path d="M9 13.5a3 3 0 0 1 5.2-2" />
+      <path d="M15 13.5a3 3 0 0 1-5.2 2" />
+      <path d="M14.5 9.5v2h-2" />
+      <path d="M9.5 17.5v-2h2" />
+    </svg>
+  );
+}
+
+export function IconTrash({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M4 7h16" />
+      <path d="M9 7V4h6v3" />
+      <path d="M6 7l1 13h10l1-13" />
+    </svg>
+  );
+}
+
+export function IconShare({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M12 15V3" />
+      <path d="M8 7l4-4 4 4" />
+      <path d="M8 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-2" />
+    </svg>
+  );
+}
+
+export function IconClose({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}

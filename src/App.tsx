@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { saveTracking } from "./lib/savedTracking";
 import { useAppState } from "./state/AppStateContext";
-import ImportPhase from "./phases/Import/ImportPhase";
+import LibraryPhase from "./phases/Library/LibraryPhase";
+import RecordPhase from "./phases/Record/RecordPhase";
 import TrackPhase from "./phases/Track/TrackPhase";
 import HaloPhase from "./phases/Halo/HaloPhase";
 import PreviewPhase from "./phases/Preview/PreviewPhase";
@@ -16,8 +17,10 @@ export default function App() {
   }, [project, keyframes]);
 
   switch (state.phase) {
-    case "import":
-      return <ImportPhase />;
+    case "library":
+      return <LibraryPhase />;
+    case "record":
+      return <RecordPhase />;
     case "track":
       return <TrackPhase />;
     case "halo":

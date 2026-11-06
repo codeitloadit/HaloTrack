@@ -38,7 +38,7 @@ const MIME_CANDIDATES = [
   "video/webm",
 ];
 
-function pickSupportedMime(): string {
+export function pickSupportedMime(): string {
   return MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
 }
 
