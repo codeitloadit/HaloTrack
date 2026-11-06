@@ -88,9 +88,7 @@ export default function ClipDetail({ clip, knownTags, onClose, onTrack, onDelete
         </button>
         <div className="clip-detail-title">
           {new Date(clip.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-          <span className="clip-detail-duration">
-            {formatDuration(clip.durationSec)} · {clip.width}×{clip.height}
-          </span>
+          <span className="clip-detail-duration">{formatDuration(clip.durationSec)}</span>
         </div>
       </div>
 
