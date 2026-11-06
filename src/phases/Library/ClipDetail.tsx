@@ -4,7 +4,7 @@ import { IconClose, IconRing, IconShare, IconStabilize, IconTrash } from "../../
 import { useForceVideoFirstFrame } from "../../hooks/useForceVideoFirstFrame";
 import { formatDuration } from "../../lib/clipMedia";
 import { loadClipFile } from "../../lib/clipStore";
-import { createAudioContext, hasSupportedExportFormat } from "../../lib/realtimeRender";
+import { hasSupportedExportFormat } from "../../lib/realtimeRender";
 import { stabilizeVideo, type StabilizeResult, type StabilizeStage } from "../../lib/stabilize/stabilize";
 import type { ClipMeta } from "../../state/types";
 
@@ -91,14 +91,13 @@ export default function ClipDetail({ clip, knownTags, onClose, onTrack, onDelete
 
   function handleStabilize() {
     if (!videoUrl) return;
-    // Must be created synchronously inside the tap; see createAudioContext.
-    const audioCtx = createAudioContext();
     videoRef.current?.pause();
     setError(null);
     setProgress({ stage: "analyzing", fraction: 0 });
     const wakeLock = holdWakeLock();
     const source = { objectUrl: videoUrl, width: clip.width, height: clip.height, durationSec: clip.durationSec };
-    stabilizeVideo(source, audioCtx, (stage, fraction) => setProgress({ stage, fraction }))
+    // Called synchronously inside the tap, which stabilizeVideo requires.
+    stabilizeVideo(source, (stage, fraction) => setProgress({ stage, fraction }))
       .then(onStabilized)
       .catch((err) => setError(`Stabilizing failed: ${err instanceof Error ? err.message : String(err)}`))
       .finally(() => {

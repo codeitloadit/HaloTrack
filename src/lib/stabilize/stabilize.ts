@@ -1,4 +1,5 @@
 import {
+  createAudioContext,
   createOffscreenVideo,
   playThrough,
   renderRealtime,
@@ -21,8 +22,11 @@ export type StabilizeStage = "analyzing" | "rendering";
  * so every sample is keyed to the exact media time of the frame it measured,
  * which the render pass then matches frame for frame.
  */
-export async function analyzeMotion(source: RealtimeSource, onProgress: (fraction: number) => void): Promise<MotionSample[]> {
-  const videoEl = createOffscreenVideo(source);
+export async function analyzeMotion(
+  source: RealtimeSource,
+  onProgress: (fraction: number) => void,
+  videoEl: HTMLVideoElement = createOffscreenVideo(source),
+): Promise<MotionSample[]> {
   videoEl.muted = true;
   const scale = ANALYSIS_LONG_SIDE / Math.max(source.width, source.height);
   const width = Math.max(32, Math.round(source.width * scale));
@@ -93,26 +97,32 @@ export interface StabilizeResult extends RealtimeRenderResult {
 /**
  * Two real-time passes: measure the camera's motion, then re-record the clip
  * with each frame counter-moved onto a smoothed path and zoomed just enough to
- * hide the edges. `audioCtx` must come from createAudioContext() inside the
- * user gesture, since the render pass only starts once analysis is done.
+ * hide the edges.
+ *
+ * Must be called synchronously inside the user gesture: the audio context and
+ * both passes' videos are set up before the first await, since iOS only allows
+ * them to start from within the gesture (see createOffscreenVideo).
  */
 export async function stabilizeVideo(
   source: RealtimeSource,
-  audioCtx: AudioContext,
   onProgress: (stage: StabilizeStage, fraction: number) => void,
 ): Promise<StabilizeResult> {
+  const audioCtx = createAudioContext();
+  const analysisVideo = createOffscreenVideo(source);
+  const renderVideo = createOffscreenVideo(source);
   try {
-    const samples = await analyzeMotion(source, (f) => onProgress("analyzing", f));
+    const samples = await analyzeMotion(source, (f) => onProgress("analyzing", f), analysisVideo);
     const plan = planStabilization(samples, source.width / source.height);
     const result = await renderRealtime(
       source,
       audioCtx,
       (ctx, videoEl, t, size) => drawStabilizedFrame(ctx, videoEl, correctionAt(plan, t), plan.zoom, size),
       (f) => onProgress("rendering", f),
-      { perVideoFrame: true },
+      { perVideoFrame: true, videoEl: renderVideo },
     );
     return { ...result, zoom: plan.zoom };
   } catch (err) {
+    renderVideo.remove();
     if (audioCtx.state !== "closed") void audioCtx.close();
     throw err;
   }

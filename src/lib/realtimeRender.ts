@@ -46,6 +46,8 @@ export interface RenderOptions {
    * frame, the latest reported frame time can lag the frame drawImage paints.
    */
   perVideoFrame?: boolean;
+  /** A video from createOffscreenVideo(), when the render starts too long after the gesture to create one itself. */
+  videoEl?: HTMLVideoElement;
 }
 
 export interface RealtimeRenderResult {
@@ -95,6 +97,12 @@ export function createAudioContext(): AudioContext {
  * as the picture freezing partway through playback while the audio keeps playing.
  * Positioning it far off-screen (rather than shrinking it) avoids that signal
  * while still keeping it invisible to the user.
+ *
+ * Call this synchronously inside the user gesture. iOS rejects play() outside a
+ * gesture (NotAllowedError) unless that element has already been played inside
+ * one, and playback may only start long after the tap, e.g. after stabilization's
+ * analysis pass. Starting and immediately pausing it here unlocks it; nothing is
+ * heard since it's paused before anything has even loaded.
  */
 export function createOffscreenVideo(source: RealtimeSource): HTMLVideoElement {
   const videoEl = document.createElement("video");
@@ -107,6 +115,8 @@ export function createOffscreenVideo(source: RealtimeSource): HTMLVideoElement {
   videoEl.style.height = `${source.height}px`;
   videoEl.style.pointerEvents = "none";
   document.body.appendChild(videoEl);
+  videoEl.play().catch(() => {});
+  videoEl.pause();
   return videoEl;
 }
 
@@ -209,7 +219,8 @@ export function playThrough(videoEl: HTMLVideoElement, durationSec: number, onTi
  * Safari considers malformed (e.g. not recognized by the iOS "Save Video"
  * action), whereas a normal continuous real-time capture does not.
  *
- * `audioCtx` must come from createAudioContext() called inside the user gesture.
+ * `audioCtx` must come from createAudioContext() called inside the user gesture,
+ * and this must be called there too unless `options.videoEl` is given.
  */
 export async function renderRealtime(
   source: RealtimeSource,
@@ -218,13 +229,13 @@ export async function renderRealtime(
   onProgress: (fraction: number) => void,
   options: RenderOptions = {},
 ): Promise<RealtimeRenderResult> {
+  const videoEl = options.videoEl ?? createOffscreenVideo(source);
   const canvas = document.createElement("canvas");
   canvas.width = source.width;
   canvas.height = source.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not acquire 2d canvas context");
 
-  const videoEl = createOffscreenVideo(source);
   // Deliberately not muted: some browsers only feed decoded audio into a
   // MediaElementSource when the element itself is unmuted. Staying silent
   // instead relies on never connecting the audio graph to the speakers (below)
