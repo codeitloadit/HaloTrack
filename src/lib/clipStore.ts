@@ -49,10 +49,24 @@ export function newClipId(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Copies a blob read from IndexedDB into memory. WebKit backs those blobs with
+ * files in its database directory, and images loaded from them have been seen
+ * to go blank after a while; thumbnails are small enough to just hold.
+ */
+async function inMemory(blob: Blob): Promise<Blob> {
+  try {
+    return new Blob([await blob.arrayBuffer()], { type: blob.type || "image/jpeg" });
+  } catch {
+    return blob;
+  }
+}
+
 export async function listClips(): Promise<ClipMeta[]> {
   const db = await openDb();
   const clips = await requestResult(db.transaction(CLIPS).objectStore(CLIPS).getAll() as IDBRequest<ClipMeta[]>);
-  return clips.sort((a, b) => b.createdAt - a.createdAt);
+  const withThumbnails = await Promise.all(clips.map(async (c) => ({ ...c, thumbnail: await inMemory(c.thumbnail) })));
+  return withThumbnails.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function saveClip(meta: ClipMeta, video: Blob): Promise<void> {

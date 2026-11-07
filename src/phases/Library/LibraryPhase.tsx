@@ -31,14 +31,18 @@ interface PendingImport {
 
 const NOTICE_MS = 4000;
 
-function BlobImage({ blob }: { blob: Blob }) {
-  const ref = useRef<HTMLImageElement>(null);
-  useEffect(() => {
-    const url = URL.createObjectURL(blob);
-    ref.current!.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [blob]);
-  return <img ref={ref} alt="" />;
+// One URL per thumbnail for the whole session rather than one per tile mount:
+// on iOS, repeatedly creating and revoking URLs as filters remount tiles has
+// left thumbnails blank. They're small, so never revoking them is fine.
+const thumbnailUrls = new WeakMap<Blob, string>();
+
+function thumbnailUrl(blob: Blob): string {
+  let url = thumbnailUrls.get(blob);
+  if (!url) {
+    url = URL.createObjectURL(blob);
+    thumbnailUrls.set(blob, url);
+  }
+  return url;
 }
 
 function describeError(prefix: string, err: unknown): string {
@@ -365,7 +369,7 @@ export default function LibraryPhase() {
                   onClick={() => (selecting ? toggleSelected(clip) : setOpenClipId(clip.id))}
                   aria-pressed={selecting ? isSelected : undefined}
                 >
-                  <BlobImage blob={clip.thumbnail} />
+                  <img src={thumbnailUrl(clip.thumbnail)} alt="" />
                   <span className="library-tile-duration">{formatDuration(clip.durationSec)}</span>
                   {clip.tags.length > 0 && <span className="library-tile-tags">{clip.tags.join(" · ")}</span>}
                   <span className="library-tile-badges">
