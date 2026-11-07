@@ -40,6 +40,23 @@ async function openCamera(facingMode: FacingMode): Promise<MediaStream> {
   }
 }
 
+export type ZoomFactor = 1 | 2;
+
+interface ZoomRange {
+  /** The camera's zoom setting at 1×: whatever it opened at, not necessarily its minimum. */
+  base: number;
+  max: number;
+}
+
+/** Null when the browser or camera can't zoom (e.g. most front cameras, or no `zoom` constraint support). */
+function zoomRange(stream: MediaStream): ZoomRange | null {
+  const track = stream.getVideoTracks()[0];
+  const zoom = (track?.getCapabilities?.() as { zoom?: { min: number; max: number } } | undefined)?.zoom;
+  if (!zoom) return null;
+  const base = (track.getSettings() as { zoom?: number }).zoom ?? zoom.min;
+  return { base, max: zoom.max };
+}
+
 function describeCameraError(err: unknown): string {
   if (err instanceof DOMException) {
     if (err.name === "NotAllowedError") return "Camera access was denied. Allow it in Settings to record.";
@@ -59,6 +76,8 @@ export function useCameraRecorder(videoRef: RefObject<HTMLVideoElement | null>) 
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [zoomRangeState, setZoomRange] = useState<ZoomRange | null>(null);
+  const [zoom, setZoomState] = useState<ZoomFactor>(1);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef(0);
@@ -75,6 +94,8 @@ export function useCameraRecorder(videoRef: RefObject<HTMLVideoElement | null>) 
         if (cancelled) return stopTracks(s);
         acquired = s;
         setStream(s);
+        setZoomRange(zoomRange(s));
+        setZoomState(1);
         setError(null);
       })
       .catch((err) => {
@@ -154,6 +175,20 @@ export function useCameraRecorder(videoRef: RefObject<HTMLVideoElement | null>) 
     });
   }, []);
 
+  const canZoom2x = zoomRangeState !== null && zoomRangeState.max >= zoomRangeState.base * 2;
+
+  const setZoom = useCallback(
+    (factor: ZoomFactor) => {
+      const track = stream?.getVideoTracks()[0];
+      if (!track || !zoomRangeState) return;
+      track
+        .applyConstraints({ advanced: [{ zoom: zoomRangeState.base * factor } as MediaTrackConstraintSet] })
+        .then(() => setZoomState(factor))
+        .catch((err) => setError(describeCameraError(err)));
+    },
+    [stream, zoomRangeState],
+  );
+
   const flip = useCallback(() => {
     if (recorderRef.current) return;
     setFacingMode((m) => (m === "environment" ? "user" : "environment"));
@@ -162,5 +197,14 @@ export function useCameraRecorder(videoRef: RefObject<HTMLVideoElement | null>) 
   return {
     ready: stream !== null,
     error: cameraSupported ? error : "Camera isn't available here. It needs HTTPS (or the home-screen app).",
-    isRecording, elapsed, facingMode, start, stop, flip };
+    isRecording,
+    elapsed,
+    facingMode,
+    start,
+    stop,
+    flip,
+    zoom,
+    canZoom2x,
+    setZoom,
+  };
 }

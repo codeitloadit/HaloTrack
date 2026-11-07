@@ -84,6 +84,12 @@ input[type="range"] {
   font-family: ui-monospace, monospace;
 }
 
+.video-diagnostic.info {
+  background: rgba(40, 44, 52, 0.95);
+  font-family: inherit;
+  font-size: 13px;
+}
+
 input[type="text"] {
   -webkit-user-select: text;
   user-select: text;
@@ -111,6 +117,10 @@ input[type="text"] {
   color: var(--accent-ink);
 }
 
+.tag-chip.partial {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
 /* --- Library --- */
 
 .library-phase {
@@ -120,6 +130,42 @@ input[type="text"] {
   flex-direction: column;
   padding-top: env(safe-area-inset-top, 0px);
   background: radial-gradient(circle at 50% 40%, #16181c 0%, #000 70%);
+}
+
+.library-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 10px 14px 0;
+  flex-shrink: 0;
+}
+
+.library-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.library-count {
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.library-header-btn {
+  justify-self: start;
+  padding: 6px 2px;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.library-header-btn:last-child {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.library-header-btn:disabled {
+  opacity: 0.4;
 }
 
 .library-filters {
@@ -161,6 +207,54 @@ input[type="text"] {
 
 .library-tile:active {
   transform: scale(0.96);
+}
+
+.library-tile.selected img {
+  opacity: 0.6;
+}
+
+.library-tile.selected {
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+
+.library-tile-check {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.library-tile.selected .library-tile-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.library-grid.selecting .library-tile-tags {
+  max-width: calc(100% - 38px);
+}
+
+.library-tile-badges {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.library-tile-saved {
+  display: flex;
+  padding: 3px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .library-tile img {
@@ -211,6 +305,8 @@ input[type="text"] {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 10px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  /* Same height with or without the record button, so the grid doesn't jump when selecting. */
+  min-height: calc(90px + env(safe-area-inset-bottom, 0px));
   background: var(--surface-strong);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -245,6 +341,34 @@ input[type="text"] {
 .library-import-btn:disabled,
 .library-record-btn:disabled {
   opacity: 0.4;
+}
+
+.library-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 64px;
+  padding: 6px 4px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.library-action:first-child {
+  justify-self: start;
+}
+
+.library-action.end {
+  justify-self: end;
+}
+
+.library-action.danger {
+  color: #ff6b61;
+}
+
+.library-action:disabled {
+  opacity: 0.35;
 }
 
 .library-version {
@@ -356,9 +480,6 @@ input[type="text"] {
 }
 
 .library-tile-badge {
-  position: absolute;
-  left: 5px;
-  bottom: 5px;
   padding: 2px 6px;
   border-radius: 6px;
   font-size: 11px;
@@ -428,6 +549,32 @@ input[type="text"] {
   justify-content: flex-end;
 }
 
+.record-bottom-side.start {
+  justify-content: flex-start;
+}
+
+.zoom-toggle {
+  width: var(--control-size);
+  height: var(--control-size);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform 0.1s ease;
+}
+
+.zoom-toggle.zoomed {
+  color: #ffd60a;
+}
+
+.zoom-toggle:active {
+  transform: scale(0.92);
+}
+
+.zoom-toggle:disabled {
+  opacity: 0.4;
+}
+
 .shutter {
   width: 78px;
   height: 78px;
@@ -481,6 +628,17 @@ input[type="text"] {
   border-radius: 18px 18px 0 0;
   background: #16181c;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sheet-hint {
+  margin-top: -6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .sheet-preview {

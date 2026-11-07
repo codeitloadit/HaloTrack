@@ -1,15 +1,26 @@
 import { useEffect, useRef, useState } from "react";
+import BulkTagSheet from "../../components/BulkTagSheet";
 import TagSheet from "../../components/TagSheet";
-import { IconImport, IconRecord } from "../../components/icons";
+import { IconCheck, IconDownload, IconImport, IconRecord, IconTag, IconTrash } from "../../components/icons";
+import { matchesFilter, NO_FILTER, type ClipFilter } from "../../lib/clipFilters";
 import { formatDuration, probeVideo, thumbnailFromBlob, thumbnailFromImageUrl, type VideoInfo } from "../../lib/clipMedia";
-import { allTags, deleteClip, listClips, newClipId, saveClip, updateClipTags } from "../../lib/clipStore";
+import {
+  allTags,
+  deleteClip,
+  deleteClips,
+  listClips,
+  loadClipFile,
+  newClipId,
+  saveClip,
+  updateClips,
+  updateClipTags,
+} from "../../lib/clipStore";
 import { clipTrackingKey, loadTracking } from "../../lib/savedTracking";
+import { shareFiles } from "../../lib/shareFiles";
 import type { StabilizeResult } from "../../lib/stabilize/stabilize";
 import { useAppDispatch } from "../../state/AppStateContext";
 import type { ClipMeta } from "../../state/types";
 import ClipDetail from "./ClipDetail";
-
-type Filter = { kind: "all" } | { kind: "untagged" } | { kind: "tag"; tag: string };
 
 interface PendingImport {
   file: File;
@@ -18,11 +29,7 @@ interface PendingImport {
   previewUrl: string;
 }
 
-function matches(clip: ClipMeta, filter: Filter): boolean {
-  if (filter.kind === "all") return true;
-  if (filter.kind === "untagged") return clip.tags.length === 0;
-  return clip.tags.includes(filter.tag);
-}
+const NOTICE_MS = 4000;
 
 function BlobImage({ blob }: { blob: Blob }) {
   const ref = useRef<HTMLImageElement>(null);
@@ -42,11 +49,18 @@ export default function LibraryPhase() {
   const dispatch = useAppDispatch();
   const inputRef = useRef<HTMLInputElement>(null);
   const [clips, setClips] = useState<ClipMeta[] | null>(null);
-  const [filter, setFilter] = useState<Filter>({ kind: "all" });
+  const [filter, setFilter] = useState<ClipFilter>(NO_FILTER);
   const [openClipId, setOpenClipId] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  // Files for selected clips, loaded ahead of time: the share sheet must open
+  // synchronously in the tap, with no time to read them from storage first.
+  const [files, setFiles] = useState<ReadonlyMap<string, File>>(new Map());
+  const [bulkTagging, setBulkTagging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     listClips()
@@ -57,16 +71,27 @@ export default function LibraryPhase() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   const loadedClips = clips ?? [];
   const tags = allTags(loadedClips);
   const hasUntagged = loadedClips.some((c) => c.tags.length === 0);
-  // A tag filter outlives its last clip being deleted or retagged; fall back to everything then.
-  const activeFilter: Filter =
-    (filter.kind === "tag" && !tags.includes(filter.tag)) || (filter.kind === "untagged" && !hasUntagged)
-      ? { kind: "all" }
-      : filter;
-  const visible = loadedClips.filter((c) => matches(c, activeFilter));
+  // A filter outlives its last clip being deleted or retagged; drop what no longer applies.
+  const activeFilter: ClipFilter = {
+    tags: filter.tags.filter((t) => tags.includes(t)),
+    untagged: filter.untagged && hasUntagged,
+  };
+  const visible = loadedClips.filter((c) => matchesFilter(c, activeFilter));
   const openClip = loadedClips.find((c) => c.id === openClipId) ?? null;
+  // Selection only ever acts on what the filter shows.
+  const selected = visible.filter((c) => selectedIds.has(c.id));
+  const allVisibleSelected = visible.length > 0 && selected.length === visible.length;
+  const toSave = selected.filter((c) => !c.savedAt);
+  const filesReady = toSave.every((c) => files.has(c.id));
 
   async function handleImportFile(file: File) {
     setBusy(true);
@@ -162,19 +187,109 @@ export default function LibraryPhase() {
     }
   }
 
-  function filterChip(label: string, value: Filter) {
-    const selected =
-      activeFilter.kind === value.kind && (value.kind !== "tag" || (activeFilter.kind === "tag" && activeFilter.tag === value.tag));
+  function toggleTagFilter(tag: string) {
+    const next = activeFilter.tags.includes(tag) ? activeFilter.tags.filter((t) => t !== tag) : [...activeFilter.tags, tag];
+    setFilter({ tags: next, untagged: false });
+  }
+
+  function filterChip(label: string, selected: boolean, onClick: () => void) {
     return (
-      <button
-        key={value.kind === "tag" ? `tag:${value.tag}` : value.kind}
-        type="button"
-        className={`tag-chip${selected ? " selected" : ""}`}
-        onClick={() => setFilter(value)}
-      >
+      <button key={label} type="button" className={`tag-chip${selected ? " selected" : ""}`} onClick={onClick}>
         {label}
       </button>
     );
+  }
+
+  function loadFiles(toLoad: ClipMeta[]) {
+    for (const clip of toLoad) {
+      if (clip.savedAt || files.has(clip.id)) continue;
+      loadClipFile(clip)
+        .then((file) => setFiles((prev) => new Map(prev).set(clip.id, file)))
+        .catch((err) => setMessage(describeError("Couldn't load a clip", err)));
+    }
+  }
+
+  function setSelection(ids: ReadonlySet<string>) {
+    setSelectedIds(ids);
+    loadFiles(loadedClips.filter((c) => ids.has(c.id)));
+  }
+
+  function toggleSelected(clip: ClipMeta) {
+    const next = new Set(selectedIds);
+    if (!next.delete(clip.id)) next.add(clip.id);
+    setSelection(next);
+  }
+
+  function toggleSelectAll() {
+    const next = new Set(selectedIds);
+    for (const clip of visible) {
+      if (allVisibleSelected) next.delete(clip.id);
+      else next.add(clip.id);
+    }
+    setSelection(next);
+  }
+
+  function exitSelecting() {
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setFiles(new Map());
+  }
+
+  function replaceClips(updated: ClipMeta[]) {
+    const byId = new Map(updated.map((c) => [c.id, c]));
+    setClips((prev) => (prev ?? []).map((c) => byId.get(c.id) ?? c));
+  }
+
+  async function markSaved(saved: ClipMeta[]) {
+    const savedAt = Date.now();
+    const updated = saved.map((c) => ({ ...c, savedAt }));
+    await updateClips(updated);
+    replaceClips(updated);
+  }
+
+  function handleSaveSelected() {
+    const skipped = selected.length - toSave.length;
+    setMessage(null);
+    setNotice(null);
+    setBusy(true);
+    shareFiles(toSave.map((c) => files.get(c.id)!))
+      .then(async (shared) => {
+        if (!shared) return;
+        await markSaved(toSave);
+        exitSelecting();
+        if (skipped > 0) setNotice(`Skipped ${skipped} already saved ${skipped === 1 ? "clip" : "clips"}.`);
+      })
+      .catch((err) => setMessage(describeError("Couldn't save to Photos", err)))
+      .finally(() => setBusy(false));
+  }
+
+  async function handleDeleteSelected() {
+    const count = selected.length;
+    if (!window.confirm(`Delete ${count} ${count === 1 ? "clip" : "clips"}? This can't be undone.`)) return;
+    setBusy(true);
+    try {
+      const ids = new Set(selected.map((c) => c.id));
+      await deleteClips([...ids]);
+      setClips((prev) => (prev ?? []).filter((c) => !ids.has(c.id)));
+      exitSelecting();
+    } catch (err) {
+      setMessage(describeError("Couldn't delete clips", err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleBulkTags(changed: ClipMeta[]) {
+    setBusy(true);
+    try {
+      await updateClips(changed);
+      replaceClips(changed);
+      setBulkTagging(false);
+    } catch (err) {
+      setMessage(describeError("Couldn't update tags", err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -196,12 +311,39 @@ export default function LibraryPhase() {
           {message}
         </div>
       )}
+      {notice && !message && (
+        <div className="video-diagnostic info" onClick={() => setNotice(null)}>
+          {notice}
+        </div>
+      )}
+
+      {loadedClips.length > 0 && (
+        <div className="library-header">
+          {selecting ? (
+            <button type="button" className="library-header-btn" onClick={toggleSelectAll} disabled={busy || visible.length === 0}>
+              {allVisibleSelected ? "Deselect All" : "Select All"}
+            </button>
+          ) : (
+            <span className="library-title">Clips</span>
+          )}
+          {selecting && <span className="library-count">{selected.length} selected</span>}
+          <button
+            type="button"
+            className="library-header-btn"
+            onClick={() => (selecting ? exitSelecting() : setSelecting(true))}
+            disabled={busy}
+          >
+            {selecting ? "Done" : "Select"}
+          </button>
+        </div>
+      )}
 
       {loadedClips.length > 0 && (
         <div className="library-filters">
-          {filterChip("All", { kind: "all" })}
-          {tags.map((tag) => filterChip(tag, { kind: "tag", tag }))}
-          {hasUntagged && filterChip("Untagged", { kind: "untagged" })}
+          {filterChip("All", activeFilter.tags.length === 0 && !activeFilter.untagged, () => setFilter(NO_FILTER))}
+          {tags.map((tag) => filterChip(tag, activeFilter.tags.includes(tag), () => toggleTagFilter(tag)))}
+          {hasUntagged &&
+            filterChip("Untagged", activeFilter.untagged, () => setFilter({ tags: [], untagged: !activeFilter.untagged }))}
         </div>
       )}
 
@@ -212,41 +354,96 @@ export default function LibraryPhase() {
             <div>Record a clip or import one from Photos.</div>
           </div>
         ) : (
-          <div className="library-grid">
-            {visible.map((clip) => (
-              <button key={clip.id} type="button" className="library-tile" onClick={() => setOpenClipId(clip.id)}>
-                <BlobImage blob={clip.thumbnail} />
-                <span className="library-tile-duration">{formatDuration(clip.durationSec)}</span>
-                {clip.tags.length > 0 && <span className="library-tile-tags">{clip.tags.join(" · ")}</span>}
-                {clip.stabilizedFrom && <span className="library-tile-badge">Stabilized</span>}
-              </button>
-            ))}
+          <div className={`library-grid${selecting ? " selecting" : ""}`}>
+            {visible.map((clip) => {
+              const isSelected = selectedIds.has(clip.id);
+              return (
+                <button
+                  key={clip.id}
+                  type="button"
+                  className={`library-tile${isSelected ? " selected" : ""}`}
+                  onClick={() => (selecting ? toggleSelected(clip) : setOpenClipId(clip.id))}
+                  aria-pressed={selecting ? isSelected : undefined}
+                >
+                  <BlobImage blob={clip.thumbnail} />
+                  <span className="library-tile-duration">{formatDuration(clip.durationSec)}</span>
+                  {clip.tags.length > 0 && <span className="library-tile-tags">{clip.tags.join(" · ")}</span>}
+                  <span className="library-tile-badges">
+                    {clip.savedAt && (
+                      <span className="library-tile-saved" title="Saved to Photos" aria-label="saved to Photos">
+                        <IconDownload size={12} />
+                      </span>
+                    )}
+                    {clip.stabilizedFrom && <span className="library-tile-badge">Stabilized</span>}
+                  </span>
+                  {selecting && <span className="library-tile-check">{isSelected && <IconCheck size={14} />}</span>}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
 
-      <div className="library-bar">
-        <button
-          type="button"
-          className="library-import-btn"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          aria-label="import video"
-        >
-          <IconImport size={22} />
-          <span>Import</span>
-        </button>
-        <button
-          type="button"
-          className="library-record-btn"
-          onClick={() => dispatch({ type: "SET_PHASE", phase: "record" })}
-          disabled={busy}
-          aria-label="record clips"
-        >
-          <IconRecord size={30} />
-        </button>
-        <div className="library-version">{__APP_VERSION__}</div>
-      </div>
+      {selecting ? (
+        <div className="library-bar">
+          <button
+            type="button"
+            className="library-action danger"
+            onClick={handleDeleteSelected}
+            disabled={busy || selected.length === 0}
+          >
+            <IconTrash size={22} />
+            <span>Delete</span>
+          </button>
+          <button
+            type="button"
+            className="library-action"
+            onClick={() => setBulkTagging(true)}
+            disabled={busy || selected.length === 0}
+          >
+            <IconTag size={22} />
+            <span>Tags</span>
+          </button>
+          <button
+            type="button"
+            className="library-action end"
+            onClick={handleSaveSelected}
+            disabled={busy || toSave.length === 0 || !filesReady}
+          >
+            <IconDownload size={22} />
+            <span>
+              {selected.length > 0 && toSave.length === 0
+                ? "All saved"
+                : toSave.length < selected.length
+                  ? `Save ${toSave.length} new`
+                  : "Save"}
+            </span>
+          </button>
+        </div>
+      ) : (
+        <div className="library-bar">
+          <button
+            type="button"
+            className="library-import-btn"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+            aria-label="import video"
+          >
+            <IconImport size={22} />
+            <span>Import</span>
+          </button>
+          <button
+            type="button"
+            className="library-record-btn"
+            onClick={() => dispatch({ type: "SET_PHASE", phase: "record" })}
+            disabled={busy}
+            aria-label="record clips"
+          >
+            <IconRecord size={30} />
+          </button>
+          <div className="library-version">{__APP_VERSION__}</div>
+        </div>
+      )}
 
       {openClip && (
         <ClipDetail
@@ -257,7 +454,18 @@ export default function LibraryPhase() {
           onTrack={(file) => handleTrack(openClip, file)}
           onDelete={() => handleDelete(openClip)}
           onTagsChange={(clipTags) => handleTagsChange(openClip, clipTags)}
+          onSaved={() => markSaved([openClip])}
           onStabilized={(result) => handleStabilized(openClip, result)}
+        />
+      )}
+
+      {bulkTagging && (
+        <BulkTagSheet
+          clips={selected}
+          knownTags={tags}
+          busy={busy}
+          onSave={handleBulkTags}
+          onCancel={() => setBulkTagging(false)}
         />
       )}
 

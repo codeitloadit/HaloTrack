@@ -81,26 +81,39 @@ function extensionFor(mimeType: string): string {
 
 export async function loadClipFile(clip: ClipMeta): Promise<File> {
   const blob = await getClipVideo(clip.id);
-  const name = `halotrack-${new Date(clip.createdAt).toISOString().slice(0, 19).replace(/[T:]/g, "-")}.${extensionFor(clip.mimeType)}`;
+  const name = `halotrack-${new Date(clip.createdAt).toISOString().slice(0, 23).replace(/[T:.]/g, "-")}.${extensionFor(clip.mimeType)}`;
   return new File([blob], name, { type: clip.mimeType });
 }
 
-export async function updateClipTags(clip: ClipMeta, tags: string[]): Promise<ClipMeta> {
+/** Overwrites the metadata of existing clips, all in one transaction. */
+export async function updateClips(clips: ClipMeta[]): Promise<void> {
+  if (clips.length === 0) return;
   const db = await openDb();
   const tx = db.transaction(CLIPS, "readwrite");
-  const updated = { ...clip, tags };
-  tx.objectStore(CLIPS).put(updated);
+  const store = tx.objectStore(CLIPS);
+  for (const clip of clips) store.put(clip);
   await transactionDone(tx);
+}
+
+export async function updateClipTags(clip: ClipMeta, tags: string[]): Promise<ClipMeta> {
+  const updated = { ...clip, tags };
+  await updateClips([updated]);
   return updated;
 }
 
-export async function deleteClip(id: string): Promise<void> {
+export async function deleteClips(ids: string[]): Promise<void> {
   const db = await openDb();
   const tx = db.transaction([CLIPS, VIDEOS], "readwrite");
-  tx.objectStore(CLIPS).delete(id);
-  tx.objectStore(VIDEOS).delete(id);
+  for (const id of ids) {
+    tx.objectStore(CLIPS).delete(id);
+    tx.objectStore(VIDEOS).delete(id);
+  }
   await transactionDone(tx);
-  clearTracking(clipTrackingKey(id));
+  for (const id of ids) clearTracking(clipTrackingKey(id));
+}
+
+export function deleteClip(id: string): Promise<void> {
+  return deleteClips([id]);
 }
 
 /** Unique tags across all clips, most used first, ties alphabetical. */

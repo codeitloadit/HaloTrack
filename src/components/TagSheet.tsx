@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { canonicalTag } from "../lib/clipFilters";
 import { IconTrash } from "./icons";
 
 interface TagSheetProps {
@@ -10,13 +11,6 @@ interface TagSheetProps {
   busy?: boolean;
   onSave: (tags: string[]) => void;
   onDiscard: () => void;
-}
-
-/** Reuses an existing tag's spelling when the typed one only differs by case. */
-function canonicalTag(input: string, existing: string[]): string | null {
-  const trimmed = input.trim().replace(/\s+/g, " ");
-  if (!trimmed) return null;
-  return existing.find((t) => t.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
 }
 
 export default function TagSheet({ mode, knownTags, initialTags = [], previewUrl, busy, onSave, onDiscard }: TagSheetProps) {

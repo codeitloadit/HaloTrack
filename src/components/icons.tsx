@@ -209,3 +209,12 @@ export function IconStabilize({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function IconTag({ size = 20 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base}>
+      <path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" />
+      <circle cx="8" cy="8" r="1.5" />
+    </svg>
+  );
+}

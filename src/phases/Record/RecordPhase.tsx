@@ -101,7 +101,19 @@ export default function RecordPhase() {
       </div>
 
       <div className="record-bottom">
-        <div className="record-bottom-side" />
+        <div className="record-bottom-side start">
+          {camera.canZoom2x && (
+            <button
+              type="button"
+              className={`zoom-toggle${camera.zoom === 2 ? " zoomed" : ""}`}
+              onClick={() => camera.setZoom(camera.zoom === 2 ? 1 : 2)}
+              disabled={finishing}
+              aria-label={camera.zoom === 2 ? "zoom out to 1x" : "zoom in to 2x"}
+            >
+              {camera.zoom}×
+            </button>
+          )}
+        </div>
         <button
           type="button"
           className={`shutter${camera.isRecording ? " recording" : ""}`}

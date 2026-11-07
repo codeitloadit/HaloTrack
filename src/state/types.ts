@@ -12,6 +12,8 @@ export interface ClipMeta {
   thumbnail: Blob;
   /** Set on a stabilized copy: the id of the clip it was made from. */
   stabilizedFrom?: string;
+  /** When the clip was last shared out through the share sheet (where iOS's "Save to Photos" lives). */
+  savedAt?: number;
 }
 
 export interface Project {

@@ -5,6 +5,7 @@ import { useForceVideoFirstFrame } from "../../hooks/useForceVideoFirstFrame";
 import { formatDuration } from "../../lib/clipMedia";
 import { loadClipFile } from "../../lib/clipStore";
 import { hasSupportedExportFormat } from "../../lib/realtimeRender";
+import { shareFiles } from "../../lib/shareFiles";
 import { stabilizeVideo, type StabilizeResult, type StabilizeStage } from "../../lib/stabilize/stabilize";
 import type { ClipMeta } from "../../state/types";
 
@@ -16,6 +17,7 @@ interface ClipDetailProps {
   onDelete: () => Promise<void>;
   onTagsChange: (tags: string[]) => Promise<void>;
   onStabilized: (result: StabilizeResult) => Promise<void>;
+  onSaved: () => Promise<void>;
 }
 
 const STAGE_LABELS: Record<StabilizeStage, string> = {
@@ -32,12 +34,23 @@ async function holdWakeLock(): Promise<WakeLockSentinel | null> {
   }
 }
 
-export default function ClipDetail({ clip, knownTags, onClose, onTrack, onDelete, onTagsChange, onStabilized }: ClipDetailProps) {
+export default function ClipDetail({
+  clip,
+  knownTags,
+  onClose,
+  onTrack,
+  onDelete,
+  onTagsChange,
+  onStabilized,
+  onSaved,
+}: ClipDetailProps) {
   const [file, setFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [editingTags, setEditingTags] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // An already-saved clip takes a second tap to save again, so duplicates are never made by accident.
+  const [confirmResave, setConfirmResave] = useState(false);
   const [progress, setProgress] = useState<{ stage: StabilizeStage; fraction: number } | null>(null);
   const working = busy || progress !== null;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -62,21 +75,16 @@ export default function ClipDetail({ clip, knownTags, onClose, onTrack, onDelete
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clip.id]);
 
-  async function handleShare() {
+  function handleShare() {
     if (!file) return;
-    const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
-    if (nav.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file] });
-      } catch {
-        // Dismissing the share sheet rejects; nothing to do.
-      }
+    if (clip.savedAt && !confirmResave) {
+      setConfirmResave(true);
       return;
     }
-    const a = document.createElement("a");
-    a.href = videoUrl!;
-    a.download = file.name;
-    a.click();
+    setConfirmResave(false);
+    shareFiles([file])
+      .then((shared) => (shared ? onSaved() : undefined))
+      .catch((err) => setError(`Couldn't save to Photos: ${err instanceof Error ? err.message : String(err)}`));
   }
 
   async function handleDelete() {
@@ -127,6 +135,7 @@ export default function ClipDetail({ clip, knownTags, onClose, onTrack, onDelete
           <span className="clip-detail-duration">
             {formatDuration(clip.durationSec)}
             {clip.stabilizedFrom && " · Stabilized"}
+            {clip.savedAt && " · Saved to Photos"}
           </span>
         </div>
       </div>
@@ -134,6 +143,11 @@ export default function ClipDetail({ clip, knownTags, onClose, onTrack, onDelete
       <div className="clip-detail-stage">
         {videoUrl && <video ref={videoRef} src={videoUrl} controls playsInline className="clip-detail-video" />}
         {(error ?? diagnostic) && <div className="video-diagnostic">{error ?? diagnostic}</div>}
+        {confirmResave && !(error ?? diagnostic) && (
+          <div className="video-diagnostic info" onClick={() => setConfirmResave(false)}>
+            Already saved to Photos on {new Date(clip.savedAt!).toLocaleDateString()}. Tap share again to save another copy.
+          </div>
+        )}
         {progress && (
           <div className="clip-detail-progress">
             <span>{STAGE_LABELS[progress.stage]}…</span>
