@@ -14,11 +14,15 @@ export interface ClipMeta {
   stabilizedFrom?: string;
   /** When the clip was last shared out through the share sheet (where iOS's "Save to Photos" lives). */
   savedAt?: number;
+  /** When a halo export of this clip last finished rendering. */
+  haloedAt?: number;
 }
 
 export interface Project {
   /** Stable identity used to remember this video's tracking across imports. */
   key: string;
+  /** The library clip this project was opened from. */
+  clipId: string;
   file: File;
   objectUrl: string;
   durationSec: number;

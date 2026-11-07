@@ -135,6 +135,7 @@ export default function ClipDetail({
           <span className="clip-detail-duration">
             {formatDuration(clip.durationSec)}
             {clip.stabilizedFrom && " · Stabilized"}
+            {clip.haloedAt && " · Haloed"}
             {clip.savedAt && " · Saved to Photos"}
           </span>
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import BulkTagSheet from "../../components/BulkTagSheet";
 import TagSheet from "../../components/TagSheet";
-import { IconCheck, IconDownload, IconImport, IconRecord, IconTag, IconTrash } from "../../components/icons";
+import { IconCheck, IconDownload, IconImport, IconRecord, IconRing, IconTag, IconTrash } from "../../components/icons";
 import { matchesFilter, NO_FILTER, type ClipFilter } from "../../lib/clipFilters";
 import { formatDuration, probeVideo, thumbnailFromBlob, thumbnailFromImageUrl, type VideoInfo } from "../../lib/clipMedia";
 import {
@@ -144,6 +144,7 @@ export default function LibraryPhase() {
       type: "LOAD_PROJECT",
       project: {
         key,
+        clipId: clip.id,
         file,
         objectUrl: URL.createObjectURL(file),
         durationSec: clip.durationSec,
@@ -373,8 +374,13 @@ export default function LibraryPhase() {
                   <span className="library-tile-duration">{formatDuration(clip.durationSec)}</span>
                   {clip.tags.length > 0 && <span className="library-tile-tags">{clip.tags.join(" · ")}</span>}
                   <span className="library-tile-badges">
+                    {clip.haloedAt && (
+                      <span className="library-tile-icon haloed" title="Haloed" aria-label="haloed">
+                        <IconRing size={14} />
+                      </span>
+                    )}
                     {clip.savedAt && (
-                      <span className="library-tile-saved" title="Saved to Photos" aria-label="saved to Photos">
+                      <span className="library-tile-icon" title="Saved to Photos" aria-label="saved to Photos">
                         <IconDownload size={12} />
                       </span>
                     )}

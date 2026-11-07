@@ -109,6 +109,18 @@ export async function updateClips(clips: ClipMeta[]): Promise<void> {
   await transactionDone(tx);
 }
 
+/** Read-modify-write in one transaction, using callbacks so it stays active between the get and the put. */
+export async function markClipHaloed(id: string): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(CLIPS, "readwrite");
+  const store = tx.objectStore(CLIPS);
+  const request = store.get(id) as IDBRequest<ClipMeta | undefined>;
+  request.onsuccess = () => {
+    if (request.result) store.put({ ...request.result, haloedAt: Date.now() });
+  };
+  await transactionDone(tx);
+}
+
 export async function updateClipTags(clip: ClipMeta, tags: string[]): Promise<ClipMeta> {
   const updated = { ...clip, tags };
   await updateClips([updated]);
