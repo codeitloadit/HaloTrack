@@ -10,7 +10,7 @@ export type AppAction =
   | { type: "RESET" };
 
 export const initialState: AppState = {
-  phase: "library",
+  phase: "import",
   project: null,
   keyframes: [],
   halo: null,

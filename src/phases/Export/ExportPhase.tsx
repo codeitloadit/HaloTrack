@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import PhaseNav from "../../components/PhaseNav";
 import { IconDownload } from "../../components/icons";
-import { markClipHaloed } from "../../lib/clipStore";
-import { exportVideo } from "../../lib/export";
-import { hasSupportedExportFormat } from "../../lib/realtimeRender";
+import { exportVideo, hasSupportedExportFormat } from "../../lib/export";
 import { useAppDispatch, useAppState } from "../../state/AppStateContext";
 
 export default function ExportPhase() {
@@ -33,8 +31,6 @@ export default function ExportPhase() {
     setResultUrl(null);
     setResultPoster(null);
     const { blob, posterDataUrl } = await exportVideo(project, state.keyframes, state.halo, (f) => setProgress(f));
-    // Only a badge in the library; not worth interrupting the export over if it fails.
-    markClipHaloed(project.clipId).catch(() => {});
     const url = URL.createObjectURL(blob);
     setResultUrl(url);
     setResultBlob(blob);

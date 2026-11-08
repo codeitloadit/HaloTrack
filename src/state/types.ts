@@ -1,28 +1,8 @@
-export type Phase = "library" | "record" | "track" | "halo" | "preview" | "export";
-
-/** A saved clip's metadata; the video bytes are stored separately so listing stays cheap. */
-export interface ClipMeta {
-  id: string;
-  createdAt: number;
-  durationSec: number;
-  width: number;
-  height: number;
-  mimeType: string;
-  tags: string[];
-  thumbnail: Blob;
-  /** Set on a stabilized copy: the id of the clip it was made from. */
-  stabilizedFrom?: string;
-  /** When the clip was last shared out through the share sheet (where iOS's "Save to Photos" lives). */
-  savedAt?: number;
-  /** When a halo export of this clip last finished rendering. */
-  haloedAt?: number;
-}
+export type Phase = "import" | "track" | "halo" | "preview" | "export";
 
 export interface Project {
   /** Stable identity used to remember this video's tracking across imports. */
   key: string;
-  /** The library clip this project was opened from. */
-  clipId: string;
   file: File;
   objectUrl: string;
   durationSec: number;

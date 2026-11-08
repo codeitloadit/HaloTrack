@@ -16,12 +16,11 @@ export default function TrackPhase() {
   const boxRef = useRef<ContentBox | null>(null);
   const controller = useTrackController(videoRef);
 
-  const project = state.project;
-  if (!project) return null;
+  if (!state.project) return null;
 
   return (
     <div className="phase-container">
-      <VideoStage src={project.objectUrl} initialTime={controller.cursor} ref={videoRef}>
+      <VideoStage src={state.project.objectUrl} initialTime={controller.cursor} ref={videoRef}>
         {(box) => {
           boxRef.current = box;
           return (
@@ -73,10 +72,6 @@ export default function TrackPhase() {
       </div>
 
       <PhaseNav
-        onBack={() => {
-          URL.revokeObjectURL(project.objectUrl);
-          dispatch({ type: "RESET" });
-        }}
         onNext={() => dispatch({ type: "SET_PHASE", phase: "halo" })}
         nextDisabled={state.keyframes.length === 0}
       />

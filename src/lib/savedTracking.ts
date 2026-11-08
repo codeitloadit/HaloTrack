@@ -2,8 +2,13 @@ import type { TrackKeyframe } from "../state/types";
 
 const STORAGE_PREFIX = "halotrack:tracking:";
 
-export function clipTrackingKey(clipId: string): string {
-  return `clip:${clipId}`;
+/**
+ * Identifies a video across separate imports. Deliberately not the file name,
+ * which iOS doesn't keep stable between picks from the photo library; byte
+ * size, duration and dimensions together are effectively unique per video.
+ */
+export function videoKey(file: File, durationSec: number, width: number, height: number): string {
+  return `${file.size}:${Math.round(durationSec * 1000)}:${width}x${height}`;
 }
 
 export function loadTracking(key: string): TrackKeyframe[] | null {
@@ -23,14 +28,6 @@ export function saveTracking(key: string, keyframes: TrackKeyframe[]): void {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(keyframes));
   } catch {
     // Storage unavailable or full; tracking just won't be remembered.
-  }
-}
-
-export function clearTracking(key: string): void {
-  try {
-    localStorage.removeItem(STORAGE_PREFIX + key);
-  } catch {
-    // Storage unavailable; nothing to clear.
   }
 }
 
